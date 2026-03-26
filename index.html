@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>TIERGEWICHTE</title>
+<style>
+  :root {
+    --bg:       #0f1009;
+    --surface:  #181911;
+    --surface2: #1f2012;
+    --border:   #2a2b1a;
+    --text:     #e8e4d0;
+    --muted:    #7a7a58;
+    --accent:   #b8cc3a;
+    --green:    #6aaa3a;
+    --red:      #cc3a3a;
+    --gold:     #c9a94e;
+    --mono:     'Courier New', monospace;
+    --sans:     -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --r:        10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
+
+  .app-header {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+
+  .tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tab { flex: 1; min-width: 0; padding: 0.65rem 0.4rem; font-size: 0.72rem; font-weight: 600; text-align: center; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.15s; letter-spacing: 0.03em; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .page { display: none; padding: 0.4rem; padding-bottom: 2rem; }
+  .page.active { display: block; }
+  .page-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg); z-index: 300; overflow-y: auto; padding: 0.6rem; padding-bottom: 3rem; }
+  .page-overlay.active { display: block; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 0.55rem; margin-bottom: 0.4rem; }
+  .card-label { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+
+  label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.2rem; font-weight: 500; }
+  select, input[type="number"], input[type="text"] {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: var(--sans); font-size: 1.3rem; padding: 0.45rem 0.7rem;
+    margin-bottom: 0.35rem; appearance: none; -webkit-appearance: none;
+  }
+  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%237a7a68' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.9rem center; padding-right: 2.2rem; }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
+
+  .btn { display: block; width: 100%; padding: 0.75rem; border: none; border-radius: var(--r); font-family: var(--sans); font-size: 1.1rem; font-weight: 600; cursor: pointer; letter-spacing: 0.02em; transition: all 0.14s; margin-bottom: 0.4rem; }
+  .btn:active { transform: scale(0.97); filter: brightness(0.88); }
+  .btn-accent { background: var(--accent); color: #0f1009; }
+  .btn-green  { background: var(--green);  color: #0f1009; }
+  .btn-ghost  { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-red    { background: transparent; color: var(--red); border: 1px solid var(--red); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* Tier-Suche */
+  .search-wrap { position: relative; margin-bottom: 0.35rem; }
+  .search-wrap input { margin-bottom: 0; }
+  .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface2); border: 1px solid var(--accent); border-top: none; border-radius: 0 0 8px 8px; z-index: 50; max-height: 200px; overflow-y: auto; }
+  .suggestion-item { padding: 0.6rem 0.75rem; cursor: pointer; font-size: 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .suggestion-item:last-child { border-bottom: none; }
+  .suggestion-item:active, .suggestion-item:hover { background: var(--border); }
+  .suggestion-meta { font-size: 0.75rem; color: var(--muted); }
+
+  /* Tier-Info Box */
+  .tier-info { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r); padding: 0.55rem 0.7rem; margin-bottom: 0.35rem; display: none; }
+  .tier-info-row { display: flex; justify-content: space-between; align-items: center; }
+  .tier-info-name { font-family: var(--mono); font-size: 1rem; color: var(--accent); font-weight: 700; }
+  .tier-info-meta { font-size: 0.78rem; color: var(--muted); }
+  .tier-info-weight { font-family: var(--mono); font-size: 1.4rem; font-weight: 700; color: var(--text); }
+  .tier-info-gain { font-size: 0.78rem; margin-top: 0.2rem; }
+  .gain-pos { color: var(--green); }
+  .gain-neg { color: var(--red); }
+
+  /* Gruppen-Auswahl */
+  .group-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--bg); margin-bottom: 0.35rem; }
+  .group-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .group-item:last-child { border-bottom: none; }
+  .group-item.selected { background: var(--surface2); }
+  .group-check { width: 20px; height: 20px; border-radius: 5px; border: 2px solid var(--border); background: var(--bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; }
+  .group-item.selected .group-check { background: var(--accent); border-color: var(--accent); color: #0f1009; }
+  .group-item-num { font-family: var(--mono); font-size: 1rem; font-weight: 700; }
+  .group-item-meta { font-size: 0.75rem; color: var(--muted); }
+  .group-search { width: 100%; background: var(--bg); border: none; border-bottom: 1px solid var(--border); color: var(--text); font-size: 1rem; padding: 0.5rem 0.75rem; border-radius: var(--r) var(--r) 0 0; }
+  .group-search:focus { outline: none; border-bottom-color: var(--accent); }
+  .selected-count { font-family: var(--mono); font-size: 0.85rem; color: var(--accent); margin-bottom: 0.35rem; }
+
+  /* Log */
+  .log-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 0.55rem 0.7rem; margin-bottom: 0.4rem; }
+  .log-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.2rem; }
+  .log-num { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--accent); }
+  .log-weight { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; color: var(--text); }
+  .log-meta { font-size: 0.75rem; color: var(--muted); display: flex; gap: 0.6rem; }
+  .badge { display: inline-block; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 700; font-family: var(--mono); letter-spacing: 0.05em; }
+  .b-sync { background: #1a2e1a; color: var(--green); }
+  .b-pend { background: #2a2000; color: var(--gold); }
+
+  /* Pending Banner */
+  #pendingBanner { background: #2a2000; border: 1px solid var(--gold); border-radius: var(--r); padding: 0.5rem 0.75rem; margin-bottom: 0.4rem; font-size: 0.82rem; color: var(--gold); display: none; }
+
+  /* Connection line */
+  .conn-line { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; padding: 0.3rem 0; }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .conn-ok   .conn-dot { background: var(--green); }
+  .conn-err  .conn-dot { background: var(--red); }
+  .conn-spin .conn-dot { background: var(--gold); animation: pulse 0.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .info-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.4rem; }
+
+  #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(3rem); background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 0.6rem 1.2rem; font-size: 0.9rem; font-weight: 600; z-index: 999; opacity: 0; transition: all 0.25s; white-space: nowrap; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.err  { border-color: var(--red); color: var(--red); }
+
+  #syncDot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex-shrink: 0; display: none; cursor: default; margin-left: 0.4rem; }
+
+  .empty { text-align: center; padding: 2rem 1rem; color: var(--muted); }
+  .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <span style="font-size:1.1rem">⚖️</span>
+  <span class="logo">TIERGEWICHTE</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v1</span>
+  <span id="syncDot" title="Nicht synchronisiert"></span>
+  <span style="flex:1"></span>
+  <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="einstallen">Einstallen</div>
+  <div class="tab" data-tab="wiegen">Wiegen</div>
+  <div class="tab" data-tab="gruppe">Gruppe</div>
+  <div class="tab" data-tab="log">Protokoll</div>
+</div>
+
+<!-- EINSTALLEN -->
+<div class="page active" id="page-einstallen">
+  <div id="pendingBanner"><span>⏳</span> <span id="pendingText"></span></div>
+  <div class="card">
+    <div class="card-label">Neues Tier erfassen</div>
+    <label>Ohrmarke (letzte 5 Stellen)</label>
+    <input type="text" id="inpOhrmarkeNeu" maxlength="5" inputmode="numeric" placeholder="z.B. 12345" oninput="this.value=this.value.replace(/\D/g,'')">
+    <div class="row2">
+      <div>
+        <label>Rasse</label>
+        <select id="selRasseNeu">
+          <option value="">– Wählen –</option>
+        </select>
+      </div>
+      <div>
+        <label>Geschlecht</label>
+        <select id="selGeschlechtNeu">
+          <option value="">– Wählen –</option>
+          <option value="m">Männlich</option>
+          <option value="w">Weiblich</option>
+        </select>
+      </div>
+    </div>
+    <label>Eingangsgewicht (kg)</label>
+    <input type="number" id="inpGewichtNeu" min="0" step="0.1" placeholder="z.B. 85">
+    <button class="btn btn-accent" onclick="einstallen()">+ Tier einstallen</button>
+  </div>
+</div>
+
+<!-- WIEGEN -->
+<div class="page" id="page-wiegen">
+  <div class="card">
+    <label>Ohrmarke suchen</label>
+    <div class="search-wrap">
+      <input type="text" id="inpSuche" inputmode="numeric" placeholder="Nummer eingeben…" oninput="onSucheInput()" autocomplete="off">
+      <div class="suggestions" id="suggestions" style="display:none"></div>
+    </div>
+    <div class="tier-info" id="tierInfo">
+      <div class="tier-info-row">
+        <div>
+          <div class="tier-info-name" id="tiInfoNum">–</div>
+          <div class="tier-info-meta" id="tiInfoMeta">–</div>
+        </div>
+        <div style="text-align:right">
+          <div class="tier-info-weight" id="tiInfoWeight">– kg</div>
+          <div class="tier-info-gain" id="tiInfoGain"></div>
+        </div>
+      </div>
+    </div>
+    <label>Ereignis</label>
+    <select id="selEreignis">
+      <option value="">– Wählen –</option>
+    </select>
+    <label>Gewicht (kg)</label>
+    <input type="number" id="inpGewicht" min="0" step="0.1" placeholder="z.B. 120">
+    <button class="btn btn-green" id="btnWiegen" onclick="wiegen()" disabled>✓ Gewicht speichern</button>
+  </div>
+</div>
+
+<!-- GRUPPENWIEGEN -->
+<div class="page" id="page-gruppe">
+  <div class="card">
+    <div class="card-label">Tiere auswählen</div>
+    <input class="group-search" type="text" id="gruppeFilter" placeholder="Filtern…" oninput="filterGruppe()">
+    <div class="group-list" id="gruppeList"></div>
+    <div class="selected-count" id="selectedCount">0 Tiere gewählt</div>
+  </div>
+  <div class="card">
+    <label>Ereignis</label>
+    <select id="selEreignisGruppe">
+      <option value="">– Wählen –</option>
+    </select>
+    <label>Gesamtgewicht (kg)</label>
+    <input type="number" id="inpGewichtGruppe" min="0" step="0.1" placeholder="z.B. 1200">
+    <div id="gruppeInfo" style="font-size:0.82rem;color:var(--muted);margin-bottom:0.4rem;display:none"></div>
+    <button class="btn btn-green" onclick="wiegenGruppe()">✓ Gruppe speichern</button>
+  </div>
+</div>
+
+<!-- PROTOKOLL OVERLAY -->
+<div class="page-overlay" id="page-log">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem">
+    <span style="font-family:var(--mono);font-size:0.8rem;color:var(--accent)">PROTOKOLL</span>
+    <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
+  </div>
+  <div id="logListe"></div>
+</div>
+
+<!-- EINSTELLUNGEN OVERLAY -->
+<div class="page-overlay" id="page-setup">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem">
+    <span style="font-family:var(--mono);font-size:0.8rem;color:var(--accent)">EINSTELLUNGEN</span>
+    <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
+  </div>
+  <div class="card">
+    <div class="card-label">Google Sheets</div>
+    <label>Sheet ID</label>
+    <input type="text" id="inpSheetId" placeholder="1xmZ…" oninput="saveCfg()">
+    <div id="sheetStatus"></div>
+    <button class="btn btn-accent" onclick="ladeBestand(false)">Verbinden & Bestand laden</button>
+  </div>
+  <div class="card">
+    <div class="card-label">Apps Script</div>
+    <label>Script URL</label>
+    <input type="url" id="inpScriptUrl" placeholder="https://script.google.com/…" oninput="saveCfg()">
+    <button class="btn btn-ghost" onclick="testScript()">Verbindung testen</button>
+    <div id="scriptStatus"></div>
+  </div>
+  <div class="card">
+    <div class="card-label">Rassen verwalten</div>
+    <div class="info-box">Trage Rassen im Sheet-Tab <strong>Rassen</strong> ein (Spalte A). Sie werden automatisch geladen.</div>
+    <div id="rassenStatus" style="font-size:0.82rem;color:var(--muted)"></div>
+  </div>
+  <div class="card">
+    <button class="btn btn-red" onclick="resetAlles()">Lokale Daten löschen</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── STATE ───────────────────────────────────────────
+const KEY = 'tiergewichte_v1';
+let S = {
+  sheetId:   '',
+  scriptUrl: '',
+  bestand:   [], // [{nr, rasse, geschlecht}]
+  rassen:    [],
+  ereignisse:[],
+  log:       [], // offline buffer
+  _selectedGruppe: [],
+};
+
+function saveS() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} }
+function loadS() { try { const r = localStorage.getItem(KEY); if (r) S = {...S, ...JSON.parse(r)}; } catch(e) {} }
+loadS();
+
+// ── DATUM UTILS ─────────────────────────────────────
+function datumHeute() {
+  const d = new Date();
+  return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear();
+}
+function parseDatum(s) {
+  if (!s) return '';
+  s = String(s).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[3]+'.'+m[2]+'.'+m[1];
+  m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (m) return m[1].padStart(2,'0')+'.'+m[2].padStart(2,'0')+'.'+m[3];
+  return s;
+}
+function datumToDate(s) {
+  const p = parseDatum(s).split('.');
+  if (p.length < 3) return null;
+  return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+}
+
+// ── BOOT ────────────────────────────────────────────
+if (S.sheetId) document.getElementById('inpSheetId').value = S.sheetId;
+if (S.scriptUrl) document.getElementById('inpScriptUrl').value = S.scriptUrl;
+
+if (S.sheetId) startBoot();
+updateSyncDot();
+renderLog();
+
+async function startBoot() {
+  await Promise.all([ladeBestand(true), ladeEreignisse(), ladeRassen()]);
+}
+
+// ── TABS ────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('page-' + t.dataset.tab).classList.add('active');
+    if (t.dataset.tab === 'gruppe') renderGruppeList();
+  });
+});
+
+function toggleSetup() { document.getElementById('page-setup').classList.toggle('active'); }
+function toggleLog() {
+  const el = document.getElementById('page-log');
+  if (!el.classList.contains('active')) renderLog();
+  el.classList.toggle('active');
+}
+
+// ── CONFIG ──────────────────────────────────────────
+function saveCfg() {
+  S.sheetId   = document.getElementById('inpSheetId').value.trim();
+  S.scriptUrl = document.getElementById('inpScriptUrl').value.trim();
+  saveS();
+}
+
+function connLine(type, msg) {
+  return `<div class="conn-line conn-${type}"><div class="conn-dot"></div><span>${msg}</span></div>`;
+}
+
+async function testScript() {
+  const st = document.getElementById('scriptStatus');
+  st.innerHTML = connLine('spin', 'Teste…');
+  try {
+    const res = await fetch(S.scriptUrl + '?ping=1');
+    const txt = await res.text();
+    st.innerHTML = connLine('ok', 'Verbindung OK');
+  } catch(e) { st.innerHTML = connLine('err', 'Fehler – URL prüfen'); }
+}
+
+// ── SHEET LADEN ─────────────────────────────────────
+async function ladeBestand(silent) {
+  if (!S.sheetId) return;
+  const st = document.getElementById('sheetStatus');
+  if (!silent) st.innerHTML = connLine('spin', 'Lade Bestand…');
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Bestand&t=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = parseCSV(await res.text());
+    // Header: Ohrmarke, Rasse, Geschlecht
+    S.bestand = rows.slice(1).filter(r => r[0]?.trim()).map(r => ({
+      nr: r[0].trim(), rasse: r[1]?.trim() || '', geschlecht: r[2]?.trim() || ''
+    }));
+    saveS();
+    if (!silent) { st.innerHTML = connLine('ok', `${S.bestand.length} Tiere geladen`); toast('Bestand geladen ✓'); }
+  } catch(e) {
+    if (!silent) st.innerHTML = connLine('err', 'Fehler: ' + e.message);
+  }
+}
+
+async function ladeEreignisse() {
+  if (!S.sheetId) return;
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Ereignisse&t=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const rows = parseCSV(await res.text());
+    S.ereignisse = rows.slice(1).map(r => r[0]?.trim()).filter(Boolean);
+    saveS();
+    fuelleEreignisse();
+  } catch(e) {}
+}
+
+async function ladeRassen() {
+  if (!S.sheetId) return;
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Rassen&t=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const rows = parseCSV(await res.text());
+    S.rassen = rows.slice(1).map(r => r[0]?.trim()).filter(Boolean);
+    saveS();
+    fuelleRassen();
+    document.getElementById('rassenStatus').textContent = S.rassen.length + ' Rassen geladen';
+  } catch(e) {}
+}
+
+function fuelleEreignisse() {
+  ['selEreignis','selEreignisGruppe'].forEach(id => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">– Wählen –</option>';
+    S.ereignisse.forEach(e => {
+      const o = document.createElement('option');
+      o.value = o.textContent = e;
+      sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
+  });
+}
+
+function fuelleRassen() {
+  const sel = document.getElementById('selRasseNeu');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">– Wählen –</option>';
+  S.rassen.forEach(r => {
+    const o = document.createElement('option');
+    o.value = o.textContent = r;
+    sel.appendChild(o);
+  });
+  if (cur) sel.value = cur;
+}
+
+// ── SHEET SUCHE ─────────────────────────────────────
+let gewichteCache = null;
+
+async function ladeGewichteCache() {
+  if (!S.sheetId) return;
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const rows = parseCSV(await res.text());
+    // Header: Datum, Ohrmarke, Gewicht, Ereignis
+    gewichteCache = rows.slice(1).filter(r => r[0] && r[1]).map(r => ({
+      datum: parseDatum(r[0]), nr: r[1].trim(), gewicht: parseFloat(r[2]) || 0, ereignis: r[3]?.trim() || ''
+    }));
+  } catch(e) {}
+}
+
+function getLetzteWaegung(nr) {
+  if (!gewichteCache) return null;
+  const eintraege = gewichteCache.filter(e => e.nr === nr).sort((a,b) => {
+    const da = datumToDate(a.datum), db = datumToDate(b.datum);
+    return db - da;
+  });
+  return eintraege[0] || null;
+}
+
+// ── TIER SUCHE ──────────────────────────────────────
+let selectedTier = null;
+
+function onSucheInput() {
+  const val = document.getElementById('inpSuche').value.trim();
+  const box  = document.getElementById('suggestions');
+  document.getElementById('tierInfo').style.display = 'none';
+  document.getElementById('btnWiegen').disabled = true;
+  selectedTier = null;
+
+  if (!val) { box.style.display = 'none'; return; }
+
+  const matches = S.bestand.filter(t => t.nr.includes(val)).slice(0, 8);
+  if (!matches.length) { box.style.display = 'none'; return; }
+
+  box.innerHTML = matches.map(t => {
+    const lw = getLetzteWaegung(t.nr);
+    const meta = lw ? `${lw.gewicht} kg · ${lw.datum}` : 'Noch nicht gewogen';
+    return `<div class="suggestion-item" onclick="selectTier('${t.nr}')">
+      <div>
+        <span style="font-family:var(--mono);font-weight:700">${t.nr}</span>
+        <span style="font-size:0.8rem;color:var(--muted);margin-left:0.4rem">${t.rasse} ${t.geschlecht}</span>
+      </div>
+      <span class="suggestion-meta">${meta}</span>
+    </div>`;
+  }).join('');
+  box.style.display = 'block';
+}
+
+function selectTier(nr) {
+  const tier = S.bestand.find(t => t.nr === nr);
+  if (!tier) return;
+  selectedTier = tier;
+  document.getElementById('inpSuche').value = nr;
+  document.getElementById('suggestions').style.display = 'none';
+
+  const lw = getLetzteWaegung(nr);
+  const info = document.getElementById('tierInfo');
+  document.getElementById('tiInfoNum').textContent = nr;
+  document.getElementById('tiInfoMeta').textContent = `${tier.rasse} · ${tier.geschlecht === 'm' ? '♂' : '♀'}`;
+
+  if (lw) {
+    document.getElementById('tiInfoWeight').textContent = lw.gewicht + ' kg';
+    // Tageszunahme
+    const today = new Date(); today.setHours(0,0,0,0);
+    const lwDate = datumToDate(lw.datum);
+    if (lwDate) {
+      const tage = Math.max(1, Math.round((today - lwDate) / 86400000));
+      const aktuell = parseFloat(document.getElementById('inpGewicht').value);
+      if (!isNaN(aktuell) && aktuell > 0) {
+        const zunahme = ((aktuell - lw.gewicht) / tage).toFixed(0);
+        const cls = zunahme >= 0 ? 'gain-pos' : 'gain-neg';
+        document.getElementById('tiInfoGain').innerHTML = `<span class="${cls}">${zunahme >= 0 ? '+' : ''}${zunahme} g/Tag (${tage}d)</span>`;
+      } else {
+        document.getElementById('tiInfoGain').innerHTML = `<span style="color:var(--muted)">${tage} Tage seit letzter Wägung</span>`;
+      }
+    }
+  } else {
+    document.getElementById('tiInfoWeight').textContent = '– kg';
+    document.getElementById('tiInfoGain').innerHTML = '<span style="color:var(--muted)">Noch nicht gewogen</span>';
+  }
+  info.style.display = 'block';
+  document.getElementById('btnWiegen').disabled = false;
+  document.getElementById('inpGewicht').focus();
+}
+
+// Update Tageszunahme live beim Eingeben
+document.getElementById('inpGewicht').addEventListener('input', () => {
+  if (selectedTier) selectTier(selectedTier.nr);
+});
+
+// Click outside closes suggestions
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) document.getElementById('suggestions').style.display = 'none';
+});
+
+// ── EINSTALLEN ──────────────────────────────────────
+async function einstallen() {
+  const nr        = document.getElementById('inpOhrmarkeNeu').value.trim();
+  const rasse     = document.getElementById('selRasseNeu').value;
+  const geschlecht= document.getElementById('selGeschlechtNeu').value;
+  const gewicht   = parseFloat(document.getElementById('inpGewichtNeu').value);
+
+  if (!nr || nr.length !== 5) { toast('Bitte 5-stellige Ohrmarke eingeben', true); return; }
+  if (!rasse)      { toast('Bitte Rasse wählen', true); return; }
+  if (!geschlecht) { toast('Bitte Geschlecht wählen', true); return; }
+  if (isNaN(gewicht) || gewicht <= 0) { toast('Bitte Gewicht eingeben', true); return; }
+
+  if (S.bestand.find(t => t.nr === nr)) {
+    if (!confirm(`Tier ${nr} ist bereits im Bestand. Trotzdem eintragen?`)) return;
+  }
+
+  const entry = { id: Date.now(), ts: new Date().toISOString(), nr, rasse, geschlecht, gewicht, ereignis: 'Einstallung', typ: 'einstallen', synced: false };
+  S.log.unshift(entry);
+  S.bestand.push({ nr, rasse, geschlecht });
+  saveS();
+  updateSyncDot();
+
+  const btn = document.querySelector('#page-einstallen .btn-accent');
+  btn.disabled = true; btn.textContent = '⏳ Speichere…';
+
+  const ok = await sendeEintrag(entry);
+  if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
+
+  btn.disabled = false; btn.textContent = '+ Tier einstallen';
+  toast(ok ? 'Eingestallt ✓' : 'Lokal gespeichert – wird später gesendet', !ok);
+
+  // Felder leeren
+  document.getElementById('inpOhrmarkeNeu').value = '';
+  document.getElementById('inpGewichtNeu').value = '';
+  gewichteCache = null; // invalidieren
+}
+
+// ── WIEGEN ──────────────────────────────────────────
+async function wiegen() {
+  if (!selectedTier) { toast('Bitte Tier auswählen', true); return; }
+  const gewicht  = parseFloat(document.getElementById('inpGewicht').value);
+  const ereignis = document.getElementById('selEreignis').value;
+
+  if (isNaN(gewicht) || gewicht <= 0) { toast('Bitte Gewicht eingeben', true); return; }
+  if (!ereignis) { toast('Bitte Ereignis wählen', true); return; }
+
+  const entry = { id: Date.now(), ts: new Date().toISOString(), nr: selectedTier.nr, gewicht, ereignis, typ: 'wiegen', synced: false };
+  S.log.unshift(entry);
+  saveS();
+  updateSyncDot();
+
+  const btn = document.getElementById('btnWiegen');
+  btn.disabled = true; btn.textContent = '⏳ Speichere…';
+
+  const ok = await sendeEintrag(entry);
+  if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
+
+  btn.disabled = false; btn.textContent = '✓ Gewicht speichern';
+  toast(ok ? 'Gewogen ✓' : 'Lokal gespeichert – wird später gesendet', !ok);
+
+  // Reset
+  document.getElementById('inpSuche').value = '';
+  document.getElementById('inpGewicht').value = '';
+  document.getElementById('tierInfo').style.display = 'none';
+  document.getElementById('btnWiegen').disabled = true;
+  selectedTier = null;
+  gewichteCache = null;
+}
+
+// ── GRUPPENWIEGEN ───────────────────────────────────
+function renderGruppeList() {
+  const filter = document.getElementById('gruppeFilter').value.toLowerCase();
+  const liste  = document.getElementById('gruppeList');
+  const tiere  = S.bestand.filter(t => !filter || t.nr.includes(filter) || t.rasse.toLowerCase().includes(filter));
+
+  if (!tiere.length) {
+    liste.innerHTML = '<div style="padding:1rem;color:var(--muted);font-size:0.85rem;text-align:center">Keine Tiere gefunden</div>';
+    return;
+  }
+
+  liste.innerHTML = tiere.map(t => {
+    const sel = S._selectedGruppe.includes(t.nr);
+    return `<div class="group-item ${sel ? 'selected' : ''}" onclick="toggleGruppe('${t.nr}')">
+      <div class="group-check">${sel ? '✓' : ''}</div>
+      <div>
+        <div class="group-item-num">${t.nr}</div>
+        <div class="group-item-meta">${t.rasse} · ${t.geschlecht === 'm' ? '♂' : '♀'}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  updateSelectedCount();
+}
+
+function toggleGruppe(nr) {
+  const idx = S._selectedGruppe.indexOf(nr);
+  if (idx >= 0) S._selectedGruppe.splice(idx, 1);
+  else S._selectedGruppe.push(nr);
+  renderGruppeList();
+}
+
+function filterGruppe() { renderGruppeList(); }
+
+function updateSelectedCount() {
+  const n = S._selectedGruppe.length;
+  document.getElementById('selectedCount').textContent = n + ' Tier' + (n !== 1 ? 'e' : '') + ' gewählt';
+  // Gewicht pro Tier anzeigen
+  const gesamt = parseFloat(document.getElementById('inpGewichtGruppe').value);
+  const info   = document.getElementById('gruppeInfo');
+  if (n > 0 && !isNaN(gesamt) && gesamt > 0) {
+    const proTier = (gesamt / n).toFixed(1);
+    info.textContent = `→ ${proTier} kg pro Tier`;
+    info.style.display = 'block';
+  } else {
+    info.style.display = 'none';
+  }
+}
+
+document.getElementById('inpGewichtGruppe').addEventListener('input', updateSelectedCount);
+
+async function wiegenGruppe() {
+  const n       = S._selectedGruppe.length;
+  const gesamt  = parseFloat(document.getElementById('inpGewichtGruppe').value);
+  const ereignis= document.getElementById('selEreignisGruppe').value;
+
+  if (n === 0) { toast('Bitte Tiere auswählen', true); return; }
+  if (isNaN(gesamt) || gesamt <= 0) { toast('Bitte Gesamtgewicht eingeben', true); return; }
+  if (!ereignis) { toast('Bitte Ereignis wählen', true); return; }
+
+  const proTier = gesamt / n;
+  const btn = document.querySelector('#page-gruppe .btn-green');
+  btn.disabled = true; btn.textContent = '⏳ Speichere…';
+
+  let erfolge = 0;
+  for (const nr of S._selectedGruppe) {
+    const entry = { id: Date.now() + Math.random(), ts: new Date().toISOString(), nr, gewicht: parseFloat(proTier.toFixed(1)), ereignis, typ: 'gruppe', synced: false };
+    S.log.unshift(entry);
+    const ok = await sendeEintrag(entry);
+    if (ok) { entry.synced = true; erfolge++; }
+  }
+  saveS();
+  updateSyncDot();
+
+  btn.disabled = false; btn.textContent = '✓ Gruppe speichern';
+  toast(`${erfolge}/${n} Tiere gespeichert ✓`);
+
+  S._selectedGruppe = [];
+  document.getElementById('inpGewichtGruppe').value = '';
+  renderGruppeList();
+  gewichteCache = null;
+}
+
+// ── SENDEN ──────────────────────────────────────────
+async function sendeEintrag(entry) {
+  if (!S.scriptUrl) return false;
+  try {
+    // Gewicht-Eintrag
+    const ok1 = await sendToScript({
+      tab: 'Gewichte',
+      f1: entry.ts.slice(0,10).split('-').reverse().join('.'), // dd.mm.yyyy
+      f2: entry.nr,
+      f3: entry.gewicht,
+      f4: entry.ereignis || 'Einstallung'
+    });
+    // Bei Einstallung auch Bestand schreiben
+    if (entry.typ === 'einstallen') {
+      await sendToScript({
+        tab: 'Bestand',
+        f1: entry.nr,
+        f2: entry.rasse,
+        f3: entry.geschlecht
+      });
+    }
+    return ok1;
+  } catch(e) { return false; }
+}
+
+async function sendToScript(params) {
+  if (!S.scriptUrl) return false;
+  const url = S.scriptUrl + '?' + new URLSearchParams(params).toString();
+  try {
+    const res = await fetch(url);
+    return (await res.text()).trim() === 'ok';
+  } catch(e) { return false; }
+}
+
+// ── PENDING SYNC ────────────────────────────────────
+async function checkPending() {
+  const unsent = S.log.filter(e => !e.synced);
+  if (!unsent.length) return;
+  const banner = document.getElementById('pendingBanner');
+  banner.style.display = 'block';
+  document.getElementById('pendingText').textContent = `${unsent.length} Eintrag${unsent.length>1?'e':''} ausstehend`;
+
+  for (const entry of unsent) {
+    const ok = await sendeEintrag(entry);
+    if (ok) { entry.synced = true; saveS(); }
+  }
+  updateSyncDot();
+  const still = S.log.filter(e => !e.synced).length;
+  if (!still) { banner.style.display = 'none'; toast('Alle Einträge synchronisiert ✓'); }
+  else document.getElementById('pendingText').textContent = `${still} Eintrag${still>1?'e':''} noch ausstehend`;
+}
+
+window.addEventListener('online', () => { toast('Netz wieder da…'); checkPending(); });
+
+function updateSyncDot() {
+  const dot = document.getElementById('syncDot');
+  const n = S.log.filter(e => !e.synced).length;
+  dot.style.display = n > 0 ? 'block' : 'none';
+  dot.title = n > 0 ? n + ' nicht synchronisiert' : '';
+}
+
+// ── LOG RENDERN ─────────────────────────────────────
+async function renderLog() {
+  const el = document.getElementById('logListe');
+  el.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:1rem">Lade…</div>';
+
+  let sheetRows = [];
+  if (S.sheetId) {
+    try {
+      const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const rows = parseCSV(await res.text());
+        sheetRows = rows.slice(1).reverse().map(r => ({
+          datum: r[0]||'', nr: r[1]||'', gewicht: r[2]||'', ereignis: r[3]||'', fromSheet: true
+        }));
+      }
+    } catch(e) {}
+  }
+
+  const local = S.log.filter(e => !e.synced).map(e => ({
+    datum: parseDatum(e.ts?.slice(0,10)), nr: e.nr, gewicht: e.gewicht, ereignis: e.ereignis,
+    synced: false, fromSheet: false
+  }));
+
+  const all = [...local, ...sheetRows];
+  if (!all.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">⚖️</div>Noch keine Einträge</div>'; return; }
+
+  el.innerHTML = all.map(e => {
+    const badge = e.fromSheet
+      ? `<span class="badge b-sync">✓ Sheets</span>`
+      : `<span class="badge b-pend">⏳ ausstehend</span>`;
+    return `<div class="log-item">
+      <div class="log-top">
+        <span class="log-num">${e.nr}</span>
+        <span class="log-weight">${e.gewicht} kg</span>
+      </div>
+      <div class="log-meta">
+        <span>${e.datum}</span>
+        <span>${e.ereignis}</span>
+        <span style="margin-left:auto">${badge}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── CSV PARSER ──────────────────────────────────────
+function parseCSV(text) {
+  return text.trim().split('\n').map(line => {
+    const cols = []; let cur = ''; let inQ = false;
+    for (const c of line) {
+      if (c === '"') inQ = !inQ;
+      else if (c === ',' && !inQ) { cols.push(cur); cur = ''; }
+      else cur += c;
+    }
+    cols.push(cur);
+    return cols.map(c => c.replace(/^"|"$/g,'').trim());
+  });
+}
+
+// ── RESET ───────────────────────────────────────────
+function resetAlles() {
+  if (!confirm('Alle lokalen Daten löschen?')) return;
+  localStorage.removeItem(KEY);
+  location.reload();
+}
+
+// ── INIT ────────────────────────────────────────────
+fuelleEreignisse();
+fuelleRassen();
+if (S.sheetId) {
+  setTimeout(() => ladeGewichteCache(), 1500);
+  checkPending();
+}
+</script>
+</body>
+</html>
