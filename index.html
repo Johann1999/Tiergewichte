@@ -803,6 +803,15 @@ function parseCSV(text) {
   });
 }
 
+// ── TOAST ──────────────────────────────────────────
+function toast(msg, err=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show' + (err ? ' err' : '');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.className = '', 3200);
+}
+
 // ── RESET ───────────────────────────────────────────
 function resetAlles() {
   if (!confirm('Alle lokalen Daten löschen?')) return;
