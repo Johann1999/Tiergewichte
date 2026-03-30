@@ -286,11 +286,8 @@
   </div>
   <div class="card">
     <div class="card-label">HI Tier Integration</div>
-    <div class="info-box">
-      Verbinde mit HI Tier um Geburtsdatum und LOM abzurufen und in den Bestand zu speichern.
-    </div>
     <label>HI Tier Script URL</label>
-    <input type="url" id="inpHITierScriptUrl" placeholder="https://script.google.com/…/exec" oninput="saveCfg()">
+    <input type="text" id="inpHITierScriptUrl" placeholder="https://script.google.com/macros/s/…/exec" oninput="saveCfg()">
     <div id="hiTierStatus"></div>
     <button class="btn btn-accent" onclick="testHITierConnection()">Verbindung testen</button>
   </div>
@@ -312,7 +309,7 @@ const KEY = 'tiergewichte_v1';
 let S = {
   sheetId:   '1pPv0UCSSlTnOCSRo-5Dvggf04grPyHqVnauNyytEkIg',
   scriptUrl: 'https://script.google.com/macros/library/d/1QLv1v-28zvI259HzMevTuTpwnH0nAwsiujJE-3Q-prNQsmzAg6mJlJoY/4',
-  hiTierScriptUrl: '',  // HI Tier Integration
+  hiTierScriptUrl: 'https://script.google.com/macros/s/AKfycbyBPVhqaJY-iT_d2ZCDacFYgdzlBGv-Rw6eYSKKCFAUCuq3cSSOdHLWXbCBf8UGjTRu/exec',
   bestand:   [], // [{nr, rasse, geschlecht}]
   rassen:    [],
   ereignisse:[],
