@@ -712,9 +712,13 @@ async function sendToScript(params) {
   if (!S.scriptUrl) return false;
   const url = S.scriptUrl + '?' + new URLSearchParams(params).toString();
   try {
-    const res = await fetch(url);
-    return (await res.text()).trim() === 'ok';
-  } catch(e) { return false; }
+    const res = await fetch(url, { mode: 'no-cors' });
+    // Bei no-cors können wir den Status nicht prüfen, aber wir nehmen an es hat geklappt wenn kein Fehler
+    return true;
+  } catch(e) { 
+    Logger.log('Sync Fehler:', e);
+    return false; 
+  }
 }
 
 // ── PENDING SYNC ────────────────────────────────────
