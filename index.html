@@ -250,10 +250,13 @@
   </div>
   <div class="card">
     <div class="card-label">Apps Script</div>
-    <label>Script URL</label>
-    <input type="url" id="inpScriptUrl" placeholder="https://script.google.com/…" oninput="saveCfg()">
-    <button class="btn btn-ghost" onclick="testScript()">Verbindung testen</button>
+    <div class="info-box">
+      Das Apps Script speichert Gewichte und Bestandsdaten direkt ins Sheet.
+    </div>
+    <label>Apps Script URL</label>
+    <input type="url" id="inpScriptUrl" placeholder="https://script.google.com/macros/s/…/exec" oninput="saveCfg()">
     <div id="scriptStatus"></div>
+    <button class="btn btn-accent" onclick="testScript()">Verbindung testen</button>
   </div>
   <div class="card">
     <div class="card-label">Rassen verwalten</div>
