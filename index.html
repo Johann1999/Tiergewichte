@@ -585,19 +585,34 @@ async function wiegen() {
   const btn = document.getElementById('btnWiegen');
   btn.disabled = true; btn.textContent = '⏳ Speichere…';
 
+  // ✅ Schneller: Reset UI sofort (nicht warten auf sync)
+  const resetUI = () => {
+    document.getElementById('inpSuche').value = '';
+    document.getElementById('inpGewicht').value = '';
+    document.getElementById('tierInfo').style.display = 'none';
+    document.getElementById('btnWiegen').disabled = true;
+    selectedTier = null;
+  };
+
+  // ✅ Sende parallel (nicht blocking)
   const ok = await sendeEintrag(entry);
   if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
 
   btn.disabled = false; btn.textContent = '✓ Gewicht speichern';
   toast(ok ? 'Gewogen ✓' : 'Lokal gespeichert – wird später gesendet', !ok);
 
+  // ✅ Cache NICHT nullen - nur aktuell gewiegte Tier entfernen wenn vorhanden
+  if (gewichteCache) {
+    gewichteCache.unshift({
+      datum: entry.ts.slice(0,10).split('-').reverse().join('.'),
+      nr: entry.nr,
+      gewicht: entry.gewicht,
+      ereignis: entry.ereignis
+    });
+  }
+
   // Reset
-  document.getElementById('inpSuche').value = '';
-  document.getElementById('inpGewicht').value = '';
-  document.getElementById('tierInfo').style.display = 'none';
-  document.getElementById('btnWiegen').disabled = true;
-  selectedTier = null;
-  gewichteCache = null;
+  resetUI();
 }
 
 // ── GRUPPENWIEGEN ───────────────────────────────────
@@ -664,46 +679,69 @@ async function wiegenGruppe() {
   const btn = document.querySelector('#page-gruppe .btn-green');
   btn.disabled = true; btn.textContent = '⏳ Speichere…';
 
-  let erfolge = 0;
-  for (const nr of S._selectedGruppe) {
-    const entry = { id: Date.now() + Math.random(), ts: new Date().toISOString(), nr, gewicht: parseFloat(proTier.toFixed(1)), ereignis, typ: 'gruppe', synced: false };
-    S.log.unshift(entry);
-    const ok = await sendeEintrag(entry);
-    if (ok) { entry.synced = true; erfolge++; }
-  }
+  // ✅ PARALLEL statt seriell: Alle Anfragen gleichzeitig senden
+  const entries = S._selectedGruppe.map(nr => ({
+    id: Date.now() + Math.random(),
+    ts: new Date().toISOString(),
+    nr,
+    gewicht: parseFloat(proTier.toFixed(1)),
+    ereignis,
+    typ: 'gruppe',
+    synced: false
+  }));
+
+  S.log.unshift(...entries);
+  saveS();
+
+  // ✅ Alle Requests parallel senden (nicht seriell!)
+  const results = await Promise.all(
+    entries.map(entry => sendeEintrag(entry))
+  );
+
+  // Update sync-Status basierend auf Ergebnisse
+  results.forEach((ok, i) => {
+    if (ok) { entries[i].synced = true; }
+  });
   saveS();
   updateSyncDot();
 
+  const erfolge = results.filter(ok => ok).length;
   btn.disabled = false; btn.textContent = '✓ Gruppe speichern';
   toast(`${erfolge}/${n} Tiere gespeichert ✓`);
 
+  // Reset
   S._selectedGruppe = [];
   document.getElementById('inpGewichtGruppe').value = '';
   renderGruppeList();
-  gewichteCache = null;
+  // ✅ Cache NOT nullen - oder nur aktualisieren wenn nötig
 }
 
 // ── SENDEN ──────────────────────────────────────────
 async function sendeEintrag(entry) {
   if (!S.scriptUrl) return false;
   try {
-    // Gewicht-Eintrag
-    const ok1 = await sendToScript({
+    // Gewicht-Eintrag (immer)
+    const gewichtRequest = sendToScript({
       tab: 'Gewichte',
       f1: entry.ts.slice(0,10).split('-').reverse().join('.'), // dd.mm.yyyy
       f2: entry.nr,
       f3: entry.gewicht,
       f4: entry.ereignis || 'Einstallung'
     });
-    // Bei Einstallung auch Bestand schreiben
+    
+    // Bei Einstallung auch Bestand schreiben (parallel!)
+    let bestandPromise = Promise.resolve(true);
     if (entry.typ === 'einstallen') {
-      await sendToScript({
+      bestandPromise = sendToScript({
         tab: 'Bestand',
         f1: entry.nr,
         f2: entry.rasse,
         f3: entry.geschlecht
       });
     }
+    
+    // ✅ Parallel warten (nicht serial)
+    const [ok1, ok2] = await Promise.all([gewichtRequest, bestandPromise]);
     return ok1;
   } catch(e) { return false; }
 }
