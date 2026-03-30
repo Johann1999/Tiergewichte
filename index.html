@@ -106,6 +106,18 @@
   .b-sync { background: #1a2e1a; color: var(--green); }
   .b-pend { background: #2a2000; color: var(--gold); }
 
+  /* Bestand Tabelle */
+  .bestand-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .bestand-table thead { background: var(--surface2); }
+  .bestand-table th { padding: 0.6rem; text-align: left; font-weight: 600; color: var(--accent); cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); }
+  .bestand-table th:hover { background: var(--border); }
+  .bestand-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
+  .bestand-table tr:hover { background: var(--surface2); }
+  .bestand-table tr.incomplete { background: rgba(204,58,58,0.1); }
+  .bestand-table tr.incomplete td { color: var(--red); }
+  .bestand-nr { font-family: var(--mono); font-weight: 600; color: var(--accent); }
+  .bestand-empty { text-align: center; padding: 2rem; color: var(--muted); }
+
   /* Pending Banner */
   #pendingBanner { background: #2a2000; border: 1px solid var(--gold); border-radius: var(--r); padding: 0.5rem 0.75rem; margin-bottom: 0.4rem; font-size: 0.82rem; color: var(--gold); display: none; }
 
@@ -144,7 +156,7 @@
   <div class="tab active" data-tab="einstallen">Einstallen</div>
   <div class="tab" data-tab="wiegen">Wiegen</div>
   <div class="tab" data-tab="gruppe">Gruppe</div>
-  <div class="tab" data-tab="log">Protokoll</div>
+  <div class="tab" data-tab="bestand">Bestand</div>
 </div>
 
 <!-- EINSTALLEN -->
@@ -226,13 +238,27 @@
   </div>
 </div>
 
-<!-- PROTOKOLL OVERLAY -->
-<div class="page-overlay" id="page-log">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem">
-    <span style="font-family:var(--mono);font-size:0.8rem;color:var(--accent)">PROTOKOLL</span>
-    <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
+<!-- BESTAND PAGE -->
+<div class="page" id="page-bestand">
+  <div id="pendingBanner" style="background:#2a2000;border:1px solid var(--gold);border-radius:var(--r);padding:0.5rem 0.75rem;margin-bottom:0.4rem;font-size:0.82rem;color:var(--gold);display:none">
+    <span>⏳</span> <span id="pendingText"></span>
   </div>
-  <div id="logListe"></div>
+  
+  <div class="card" style="padding:0.4rem">
+    <div style="display:flex;gap:0.4rem;margin-bottom:0.4rem;flex-wrap:wrap">
+      <button class="btn btn-accent" onclick="syncBestandFromHIT()" style="flex:1;min-width:150px;margin-bottom:0">🔄 HIT Daten sync</button>
+      <button class="btn btn-ghost" onclick="toggleBestandSort()" style="flex:1;min-width:150px;margin-bottom:0">⇅ Sortierung</button>
+    </div>
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-bottom:0.4rem">
+      <input type="text" id="filterOhrmarke" placeholder="Filter Ohrmarke…" style="margin-bottom:0" oninput="filterBestand()">
+      <input type="text" id="filterRasse" placeholder="Filter Rasse…" style="margin-bottom:0" oninput="filterBestand()">
+    </div>
+  </div>
+
+  <div id="bestandTabelle" style="overflow-x:auto">
+    <!-- Wird mit JavaScript gefüllt -->
+  </div>
 </div>
 
 <!-- EINSTELLUNGEN OVERLAY -->
@@ -259,6 +285,16 @@
     <button class="btn btn-accent" onclick="testScript()">Verbindung testen</button>
   </div>
   <div class="card">
+    <div class="card-label">HI Tier Integration</div>
+    <div class="info-box">
+      Verbinde mit HI Tier um Geburtsdatum und LOM abzurufen und in den Bestand zu speichern.
+    </div>
+    <label>HI Tier Script URL</label>
+    <input type="url" id="inpHITierScriptUrl" placeholder="https://script.google.com/…/exec" oninput="saveCfg()">
+    <div id="hiTierStatus"></div>
+    <button class="btn btn-accent" onclick="testHITierConnection()">Verbindung testen</button>
+  </div>
+  <div class="card">
     <div class="card-label">Rassen verwalten</div>
     <div class="info-box">Trage Rassen im Sheet-Tab <strong>Rassen</strong> ein (Spalte A). Sie werden automatisch geladen.</div>
     <div id="rassenStatus" style="font-size:0.82rem;color:var(--muted)"></div>
@@ -276,6 +312,7 @@ const KEY = 'tiergewichte_v1';
 let S = {
   sheetId:   '1pPv0UCSSlTnOCSRo-5Dvggf04grPyHqVnauNyytEkIg',
   scriptUrl: 'https://script.google.com/macros/s/AKfycbwym6OdOf0ilPSwvHCU85iBbhNoqCZNlVgLOndtD_UEYaOpkjLEf5VIxQqNacma55-T/exec',
+  hiTierScriptUrl: '',  // HI Tier Integration
   bestand:   [], // [{nr, rasse, geschlecht}]
   rassen:    [],
   ereignisse:[],
@@ -310,6 +347,10 @@ function datumToDate(s) {
 // ── BOOT ────────────────────────────────────────────
 if (S.sheetId) document.getElementById('inpSheetId').value = S.sheetId;
 if (S.scriptUrl) document.getElementById('inpScriptUrl').value = S.scriptUrl;
+if (S.hiTierScriptUrl) {
+  const el = document.getElementById('inpHITierScriptUrl');
+  if (el) el.value = S.hiTierScriptUrl;
+}
 
 if (S.sheetId) startBoot();
 updateSyncDot();
@@ -327,6 +368,7 @@ document.querySelectorAll('.tab').forEach(t => {
     t.classList.add('active');
     document.getElementById('page-' + t.dataset.tab).classList.add('active');
     if (t.dataset.tab === 'gruppe') renderGruppeList();
+    if (t.dataset.tab === 'bestand') renderBestand();
   });
 });
 
@@ -341,6 +383,7 @@ function toggleLog() {
 function saveCfg() {
   S.sheetId   = document.getElementById('inpSheetId').value.trim();
   S.scriptUrl = document.getElementById('inpScriptUrl').value.trim();
+  S.hiTierScriptUrl = document.getElementById('inpHITierScriptUrl')?.value.trim() || '';
   saveS();
 }
 
@@ -874,6 +917,265 @@ function resetAlles() {
   if (!confirm('Alle lokalen Daten löschen?')) return;
   localStorage.removeItem(KEY);
   location.reload();
+}
+
+// ── HI TIER INTEGRATION ──────────────────────────────
+async function getHITierDaten(ohrmarke) {
+  if (!S.hiTierScriptUrl) return null;
+  try {
+    const url = S.hiTierScriptUrl + '?action=getTier&ohrmarke=' + encodeURIComponent(ohrmarke);
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data && !data.error) return data;
+    return null;
+  } catch(e) {
+    console.log('Fehler beim Abrufen von HI Tier:', e);
+    return null;
+  }
+}
+
+async function testHITierConnection() {
+  if (!S.hiTierScriptUrl) {
+    toast('HI Tier Script URL nicht konfiguriert', true);
+    return;
+  }
+  
+  const st = document.getElementById('hiTierStatus');
+  st.innerHTML = connLine('spin', 'Teste…');
+  
+  try {
+    const res = await fetch(S.hiTierScriptUrl + '?action=testConnection');
+    const data = await res.json();
+    
+    if (data.connected) {
+      st.innerHTML = connLine('ok', 'HI Tier verbunden ✓');
+      toast('HI Tier Verbindung OK ✓');
+    } else {
+      st.innerHTML = connLine('err', 'HI Tier nicht erreichbar');
+      toast('HI Tier Fehler: ' + data.message, true);
+    }
+  } catch(e) {
+    st.innerHTML = connLine('err', 'Verbindungsfehler');
+    toast('Fehler: ' + e.message, true);
+  }
+}
+
+// ── BESTAND TAB ──────────────────────────────────────
+let bestandSortCol = 'nr';
+let bestandSortAsc = true;
+let bestandAllData = [];
+
+async function renderBestand() {
+  const el = document.getElementById('bestandTabelle');
+  el.innerHTML = '<div class="bestand-empty">Lade Bestandsdaten…</div>';
+
+  if (!S.sheetId) { el.innerHTML = '<div class="bestand-empty">Bitte Sheet ID konfigurieren</div>'; return; }
+
+  try {
+    // Lade Bestand + Gewichte + HI Tier Daten vom Sheet
+    const bestandUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Bestand&t=${Date.now()}`;
+    const bestandRes = await fetch(bestandUrl);
+    const bestandRows = bestandRes.ok ? parseCSV(await bestandRes.text()).slice(1) : [];
+
+    // Lade letzte Gewichte
+    const gewichteUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
+    const gewichteRes = await fetch(gewichteUrl);
+    const gewichteRows = gewichteRes.ok ? parseCSV(await gewichteRes.text()).slice(1) : [];
+
+    // Gruppiere Gewichte pro Tier (letztes zuerst)
+    const latestWeights = {};
+    gewichteRows.forEach(r => {
+      const nr = r[1];
+      if (nr && !latestWeights[nr]) latestWeights[nr] = r[2];
+    });
+
+    // Baue Bestandsdaten
+    bestandAllData = bestandRows
+      .filter(r => r[0]?.trim())
+      .map(r => ({
+        nr: r[0].trim(),
+        rasse: r[1]?.trim() || '–',
+        geschlecht: r[2]?.trim() || '–',
+        geburtsdatum: r[3]?.trim() || '',
+        lom: r[4]?.trim() || '',
+        letzterGewicht: latestWeights[r[0].trim()] || '–',
+        incomplete: !r[3]?.trim() || !r[4]?.trim()
+      }));
+
+    renderBestandTable();
+  } catch(e) {
+    el.innerHTML = `<div class="bestand-empty">Fehler beim Laden: ${e.message}</div>`;
+  }
+}
+
+function renderBestandTable() {
+  const el = document.getElementById('bestandTabelle');
+
+  // Filter anwenden
+  const oFilter = document.getElementById('filterOhrmarke').value.toLowerCase();
+  const rFilter = document.getElementById('filterRasse').value.toLowerCase();
+  
+  let filtered = bestandAllData.filter(t =>
+    (!oFilter || t.nr.includes(oFilter)) &&
+    (!rFilter || t.rasse.toLowerCase().includes(rFilter))
+  );
+
+  // Sortieren
+  filtered.sort((a, b) => {
+    let aVal = a[bestandSortCol] || '';
+    let bVal = b[bestandSortCol] || '';
+    
+    // Zahlen vergleichen falls möglich
+    const aNum = parseFloat(aVal);
+    const bNum = parseFloat(bVal);
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      return bestandSortAsc ? aNum - bNum : bNum - aNum;
+    }
+    
+    // Text vergleichen
+    if (typeof aVal === 'string') {
+      return bestandSortAsc 
+        ? aVal.localeCompare(bVal) 
+        : bVal.localeCompare(aVal);
+    }
+    return 0;
+  });
+
+  if (!filtered.length) {
+    el.innerHTML = '<div class="bestand-empty">Keine Tiere gefunden</div>';
+    return;
+  }
+
+  // HTML
+  let html = `
+    <table class="bestand-table">
+      <thead>
+        <tr>
+          <th onclick="sortBestand('nr')">Ohrmarke ${bestandSortCol === 'nr' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
+          <th onclick="sortBestand('rasse')">Rasse ${bestandSortCol === 'rasse' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
+          <th onclick="sortBestand('letzterGewicht')">Letztes Gewicht ${bestandSortCol === 'letzterGewicht' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
+          <th onclick="sortBestand('geburtsdatum')">Geb.datum ${bestandSortCol === 'geburtsdatum' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
+          <th onclick="sortBestand('lom')">LOM ${bestandSortCol === 'lom' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  filtered.forEach(t => {
+    const incompleteClass = t.incomplete ? 'incomplete' : '';
+    html += `
+      <tr class="${incompleteClass}">
+        <td class="bestand-nr">${t.nr}</td>
+        <td>${t.rasse} ${t.geschlecht === 'm' ? '♂' : '♀'}</td>
+        <td>${t.letzterGewicht} kg</td>
+        <td>${t.geburtsdatum || '–'}</td>
+        <td>${t.lom || '–'}</td>
+      </tr>
+    `;
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function sortBestand(col) {
+  if (bestandSortCol === col) {
+    bestandSortAsc = !bestandSortAsc;
+  } else {
+    bestandSortCol = col;
+    bestandSortAsc = true;
+  }
+  renderBestandTable();
+}
+
+function filterBestand() {
+  renderBestandTable();
+}
+
+function toggleBestandSort() {
+  bestandSortAsc = !bestandSortAsc;
+  renderBestandTable();
+}
+
+async function syncBestandFromHIT() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '⏳ Sync läuft…';
+
+  if (!S.hiTierScriptUrl) {
+    toast('HI Tier Script URL nicht konfiguriert', true);
+    btn.disabled = false;
+    btn.textContent = '🔄 HIT Daten sync';
+    return;
+  }
+
+  // Finde Tiere mit fehlenden Infos
+  const incomplete = bestandAllData.filter(t => !t.geburtsdatum || !t.lom);
+  
+  if (!incomplete.length) {
+    toast('Alle Tiere haben HI Daten ✓');
+    btn.disabled = false;
+    btn.textContent = '🔄 HIT Daten sync';
+    return;
+  }
+
+  const banner = document.getElementById('pendingBanner');
+  banner.style.display = 'block';
+  document.getElementById('pendingText').textContent = `Lade ${incomplete.length} Tiere von HIT…`;
+
+  // Lade HI Tier Daten parallel
+  const updates = [];
+  
+  const hitRequests = incomplete.map(async (tier) => {
+    try {
+      const data = await getHITierDaten(tier.nr);
+      if (data && data.dateOfBirth) {
+        updates.push({
+          nr: tier.nr,
+          geburtsdatum: data.dateOfBirth.split('T')[0], // YYYY-MM-DD
+          lom: data.lom || ''
+        });
+      }
+    } catch(e) {
+      console.log('Fehler bei:', tier.nr, e);
+    }
+  });
+
+  await Promise.all(hitRequests);
+
+  if (updates.length) {
+    // Schreibe ins Sheet via Script (Spalten-Updates)
+    // Bestand Sheet: Spalte D = Geburtsdatum, Spalte E = LOM
+    const writePromises = updates.flatMap(u => [
+      sendToScript({
+        tab: 'Bestand',
+        mode: 'upsert',
+        updateByNr: '1',
+        nr: u.nr,
+        col: '4', // Spalte D
+        val: u.geburtsdatum
+      }),
+      sendToScript({
+        tab: 'Bestand',
+        mode: 'upsert',
+        updateByNr: '1',
+        nr: u.nr,
+        col: '5', // Spalte E
+        val: u.lom
+      })
+    ]);
+
+    await Promise.all(writePromises);
+    saveS();
+    await renderBestand();
+    toast(`${updates.length} Tiere mit HIT Daten aktualisiert ✓`);
+  } else {
+    toast('Keine Daten von HIT gefunden', true);
+  }
+
+  banner.style.display = 'none';
+  btn.disabled = false;
+  btn.textContent = '🔄 HIT Daten sync';
 }
 
 // ── INIT ────────────────────────────────────────────
