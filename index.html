@@ -277,19 +277,12 @@
   <div class="card">
     <div class="card-label">Apps Script</div>
     <div class="info-box">
-      Das Apps Script speichert Gewichte und Bestandsdaten direkt ins Sheet.
+      Das universelle Apps Script speichert Gewichte, Bestandsdaten und HI Tier Integrationen.
     </div>
     <label>Apps Script URL</label>
-    <input type="url" id="inpScriptUrl" placeholder="https://script.google.com/macros/s/…/exec" oninput="saveCfg()">
+    <input type="text" id="inpScriptUrl" placeholder="https://script.google.com/macros/s/…/exec" oninput="saveCfg()">
     <div id="scriptStatus"></div>
     <button class="btn btn-accent" onclick="testScript()">Verbindung testen</button>
-  </div>
-  <div class="card">
-    <div class="card-label">HI Tier Integration</div>
-    <label>HI Tier Script URL</label>
-    <input type="text" id="inpHITierScriptUrl" placeholder="https://script.google.com/macros/s/…/exec" oninput="saveCfg()">
-    <div id="hiTierStatus"></div>
-    <button class="btn btn-accent" onclick="testHITierConnection()">Verbindung testen</button>
   </div>
   <div class="card">
     <div class="card-label">Rassen verwalten</div>
@@ -308,12 +301,11 @@
 const KEY = 'tiergewichte_v1';
 let S = {
   sheetId:   '1pPv0UCSSlTnOCSRo-5Dvggf04grPyHqVnauNyytEkIg',
-  scriptUrl: 'https://script.google.com/macros/library/d/1QLv1v-28zvI259HzMevTuTpwnH0nAwsiujJE-3Q-prNQsmzAg6mJlJoY/4',
-  hiTierScriptUrl: 'https://script.google.com/macros/s/AKfycbyBPVhqaJY-iT_d2ZCDacFYgdzlBGv-Rw6eYSKKCFAUCuq3cSSOdHLWXbCBf8UGjTRu/exec',
-  bestand:   [], // [{nr, rasse, geschlecht}]
+  scriptUrl: 'https://script.google.com/macros/s/AKfycbyBPVhqaJY-iT_d2ZCDacFYgdzlBGv-Rw6eYSKKCFAUCuq3cSSOdHLWXbCBf8UGjTRu/exec',
+  bestand:   [],
   rassen:    [],
   ereignisse:[],
-  log:       [], // offline buffer
+  log:       [],
   _selectedGruppe: [],
 };
 
@@ -380,7 +372,6 @@ function toggleLog() {
 function saveCfg() {
   S.sheetId   = document.getElementById('inpSheetId').value.trim();
   S.scriptUrl = document.getElementById('inpScriptUrl').value.trim();
-  S.hiTierScriptUrl = document.getElementById('inpHITierScriptUrl')?.value.trim() || '';
   saveS();
 }
 
@@ -918,9 +909,9 @@ function resetAlles() {
 
 // ── HI TIER INTEGRATION ──────────────────────────────
 async function getHITierDaten(ohrmarke) {
-  if (!S.hiTierScriptUrl) return null;
+  if (!S.scriptUrl) return null;
   try {
-    const url = S.hiTierScriptUrl + '?action=getTier&ohrmarke=' + encodeURIComponent(ohrmarke);
+    const url = S.scriptUrl + '?action=getTier&ohrmarke=' + encodeURIComponent(ohrmarke);
     const res = await fetch(url);
     const data = await res.json();
     if (data && !data.error) return data;
@@ -932,16 +923,16 @@ async function getHITierDaten(ohrmarke) {
 }
 
 async function testHITierConnection() {
-  if (!S.hiTierScriptUrl) {
-    toast('HI Tier Script URL nicht konfiguriert', true);
+  if (!S.scriptUrl) {
+    toast('Apps Script URL nicht konfiguriert', true);
     return;
   }
   
-  const st = document.getElementById('hiTierStatus');
+  const st = document.getElementById('scriptStatus');
   st.innerHTML = connLine('spin', 'Teste…');
   
   try {
-    const res = await fetch(S.hiTierScriptUrl + '?action=testConnection');
+    const res = await fetch(S.scriptUrl + '?action=testConnection');
     const data = await res.json();
     
     if (data.connected) {
@@ -1099,8 +1090,8 @@ async function syncBestandFromHIT() {
   btn.disabled = true;
   btn.textContent = '⏳ Sync läuft…';
 
-  if (!S.hiTierScriptUrl) {
-    toast('HI Tier Script URL nicht konfiguriert', true);
+  if (!S.scriptUrl) {
+    toast('Apps Script URL nicht konfiguriert', true);
     btn.disabled = false;
     btn.textContent = '🔄 HIT Daten sync';
     return;
