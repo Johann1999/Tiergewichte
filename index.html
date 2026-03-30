@@ -710,13 +710,25 @@ async function sendeEintrag(entry) {
 
 async function sendToScript(params) {
   if (!S.scriptUrl) return false;
-  const url = S.scriptUrl + '?' + new URLSearchParams(params).toString();
+  
+  // ✅ Konvertiere numerische Felder vor dem Senden
+  const cleanParams = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (key.startsWith('f')) {
+      // f1, f2, f3... sind Datenwerte → intelligent konvertieren
+      const num = parseFloat(value);
+      cleanParams[key] = !isNaN(num) && value !== '' ? num : value;
+    } else {
+      // Andere Keys (tab, mode, etc.) als String
+      cleanParams[key] = value;
+    }
+  }
+  
+  const url = S.scriptUrl + '?' + new URLSearchParams(cleanParams).toString();
   try {
     const res = await fetch(url, { mode: 'no-cors' });
-    // Bei no-cors können wir den Status nicht prüfen, aber wir nehmen an es hat geklappt wenn kein Fehler
     return true;
   } catch(e) { 
-    Logger.log('Sync Fehler:', e);
     return false; 
   }
 }
