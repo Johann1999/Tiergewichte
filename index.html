@@ -146,7 +146,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v2</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v3</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -317,8 +317,16 @@ loadS();
 function formatDatumKurz(s) {
   if (!s) return '–';
   s = String(s).trim();
+  // Google gviz Format: Date(2020,1,18) – Monat ist 0-basiert!
+  let m = s.match(/^Date\((\d{4}),(\d{1,2}),(\d{1,2})\)/);
+  if (m) {
+    const dd = String(parseInt(m[3])).padStart(2,'0');
+    const mm = String(parseInt(m[2]) + 1).padStart(2,'0');
+    const yy = m[1].slice(2);
+    return dd + '.' + mm + '.' + yy;
+  }
   // DD.MM.YYYY → DD.MM.YY
-  let m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (m) return m[1].padStart(2,'0') + '.' + m[2].padStart(2,'0') + '.' + m[3].slice(2);
   // YYYY-MM-DD → DD.MM.YY
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
