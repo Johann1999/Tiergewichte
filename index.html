@@ -1092,76 +1092,65 @@ async function syncBestandFromHIT() {
 
   if (!S.scriptUrl) {
     toast('Apps Script URL nicht konfiguriert', true);
-    btn.disabled = false;
-    btn.textContent = '🔄 HIT Daten sync';
+    btn.disabled = false; btn.textContent = '🔄 HIT Daten sync';
     return;
   }
 
-  // Finde Tiere mit fehlenden Infos
   const incomplete = bestandAllData.filter(t => !t.geburtsdatum || !t.lom);
-  
   if (!incomplete.length) {
-    toast('Alle Tiere haben HI Daten ✓');
-    btn.disabled = false;
-    btn.textContent = '🔄 HIT Daten sync';
+    toast('Alle Tiere haben HIT Daten ✓');
+    btn.disabled = false; btn.textContent = '🔄 HIT Daten sync';
     return;
   }
 
   const banner = document.getElementById('pendingBanner');
   banner.style.display = 'block';
-  document.getElementById('pendingText').textContent = `Lade ${incomplete.length} Tiere von HIT…`;
+  document.getElementById('pendingText').textContent = 'Lade HIT Bestandsregister…';
 
-  // Lade HI Tier Daten parallel
-  const updates = [];
-  
-  const hitRequests = incomplete.map(async (tier) => {
-    try {
-      const data = await getHITierDaten(tier.nr);
-      if (data && data.dateOfBirth) {
-        updates.push({
-          nr: tier.nr,
-          geburtsdatum: data.dateOfBirth.split('T')[0], // YYYY-MM-DD
-          lom: data.lom || ''
-        });
-      }
-    } catch(e) {
-      console.log('Fehler bei:', tier.nr, e);
+  try {
+    // Einmal alle HIT-Daten laden (statt ein Request pro Tier)
+    const res = await fetch(S.scriptUrl + '?action=getBestand');
+    const hitTiere = await res.json();
+
+    if (hitTiere.error) {
+      toast('HIT Fehler: ' + hitTiere.error, true);
+      banner.style.display = 'none';
+      btn.disabled = false; btn.textContent = '🔄 HIT Daten sync';
+      return;
     }
-  });
 
-  await Promise.all(hitRequests);
+    // Lokal matchen: letzte 5 Stellen der Ohrmarke
+    const updates = [];
+    for (const tier of incomplete) {
+      const hit = hitTiere.find(h => h.lom5 === String(tier.nr).padStart(5, '0'));
+      if (hit && hit.geburtsdatum) {
+        updates.push({ nr: tier.nr, geburtsdatum: hit.geburtsdatum, lom: hit.lom });
+      }
+    }
 
-  if (updates.length) {
-    // Schreibe ins Sheet via Script (Spalten-Updates)
-    // Bestand Sheet: Spalte D = Geburtsdatum, Spalte E = LOM
-    const writePromises = updates.flatMap(u => [
-      sendToScript({
-        tab: 'Bestand',
-        mode: 'upsert',
-        updateByNr: '1',
-        nr: u.nr,
-        col: '4', // Spalte D
-        val: u.geburtsdatum
-      }),
-      sendToScript({
-        tab: 'Bestand',
-        mode: 'upsert',
-        updateByNr: '1',
-        nr: u.nr,
-        col: '5', // Spalte E
-        val: u.lom
-      })
-    ]);
+    if (!updates.length) {
+      toast('Keine passenden Tiere in HIT gefunden', true);
+      banner.style.display = 'none';
+      btn.disabled = false; btn.textContent = '🔄 HIT Daten sync';
+      return;
+    }
 
-    await Promise.all(writePromises);
-    saveS();
+    document.getElementById('pendingText').textContent = `Schreibe ${updates.length} Tiere ins Sheet…`;
+
+    await Promise.all(updates.flatMap(u => [
+      sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: u.nr, col: '4', val: u.geburtsdatum }),
+      sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: u.nr, col: '5', val: u.lom })
+    ]));
+
+    banner.style.display = 'none';
     await renderBestand();
     toast(`${updates.length} Tiere mit HIT Daten aktualisiert ✓`);
-  } else {
-    toast('Keine Daten von HIT gefunden', true);
+
+  } catch(e) {
+    toast('Fehler: ' + e.message, true);
+    banner.style.display = 'none';
   }
 
-  banner.style.display = 'none';
   btn.disabled = false;
   btn.textContent = '🔄 HIT Daten sync';
 }
