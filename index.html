@@ -146,7 +146,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v1</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v2</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -301,7 +301,7 @@
 const KEY = 'tiergewichte_v1';
 let S = {
   sheetId:   '1pPv0UCSSlTnOCSRo-5Dvggf04grPyHqVnauNyytEkIg',
-  scriptUrl: 'https://script.google.com/macros/s/AKfycbyBPVhqaJY-iT_d2ZCDacFYgdzlBGv-Rw6eYSKKCFAUCuq3cSSOdHLWXbCBf8UGjTRu/exec',
+  scriptUrl: 'https://script.google.com/macros/s/AKfycbxGDiZ8O1FKzANCDP5nNBD6TFMu8QkHI5nTNvRvou5fOResGW13jns4qgQwRChAdkOR/exec',
   bestand:   [],
   rassen:    [],
   ereignisse:[],
@@ -401,7 +401,7 @@ async function ladeBestand(silent) {
     const rows = parseCSV(await res.text());
     // Header: Ohrmarke, Rasse, Geschlecht
     S.bestand = rows.slice(1).filter(r => r[0]?.trim()).map(r => ({
-      nr: r[0].trim(), rasse: r[1]?.trim() || '', geschlecht: r[2]?.trim() || ''
+      nr: r[0].trim().padStart(5, '0'), rasse: r[1]?.trim() || '', geschlecht: r[2]?.trim() || ''
     }));
     saveS();
     if (!silent) { st.innerHTML = connLine('ok', `${S.bestand.length} Tiere geladen`); toast('Bestand geladen ✓'); }
@@ -475,7 +475,7 @@ async function ladeGewichteCache() {
     const rows = parseCSV(await res.text());
     // Header: Datum, Ohrmarke, Gewicht, Ereignis
     gewichteCache = rows.slice(1).filter(r => r[0] && r[1]).map(r => ({
-      datum: parseDatum(r[0]), nr: r[1].trim(), gewicht: parseFloat(r[2]) || 0, ereignis: r[3]?.trim() || ''
+      datum: parseDatum(r[0]), nr: r[1].trim().padStart(5, '0'), gewicht: parseFloat(r[2]) || 0, ereignis: r[3]?.trim() || ''
     }));
   } catch(e) {}
 }
@@ -567,7 +567,7 @@ document.addEventListener('click', e => {
 
 // ── EINSTALLEN ──────────────────────────────────────
 async function einstallen() {
-  const nr        = document.getElementById('inpOhrmarkeNeu').value.trim();
+  const nr        = document.getElementById('inpOhrmarkeNeu').value.trim().padStart(5, '0');
   const rasse     = document.getElementById('selRasseNeu').value;
   const geschlecht= document.getElementById('selGeschlechtNeu').value;
   const gewicht   = parseFloat(document.getElementById('inpGewichtNeu').value);
@@ -981,7 +981,7 @@ async function renderBestand() {
     bestandAllData = bestandRows
       .filter(r => r[0]?.trim())
       .map(r => ({
-        nr: r[0].trim(),
+        nr: r[0].trim().padStart(5, '0'),
         rasse: r[1]?.trim() || '–',
         geschlecht: r[2]?.trim() || '–',
         geburtsdatum: r[3]?.trim() || '',
