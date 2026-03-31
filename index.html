@@ -314,6 +314,17 @@ function loadS() { try { const r = localStorage.getItem(KEY); if (r) S = {...S, 
 loadS();
 
 // ── DATUM UTILS ─────────────────────────────────────
+function formatDatumKurz(s) {
+  if (!s) return '–';
+  s = String(s).trim();
+  // DD.MM.YYYY → DD.MM.YY
+  let m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (m) return m[1].padStart(2,'0') + '.' + m[2].padStart(2,'0') + '.' + m[3].slice(2);
+  // YYYY-MM-DD → DD.MM.YY
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[3] + '.' + m[2] + '.' + m[1].slice(2);
+  return s;
+}
 function datumHeute() {
   const d = new Date();
   return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear();
@@ -1056,7 +1067,7 @@ function renderBestandTable() {
         <td class="bestand-nr">${t.nr}</td>
         <td>${t.rasse} ${t.geschlecht === 'm' ? '♂' : '♀'}</td>
         <td>${t.letzterGewicht} kg</td>
-        <td>${t.geburtsdatum || '–'}</td>
+        <td>${formatDatumKurz(t.geburtsdatum)}</td>
         <td>${t.lom || '–'}</td>
       </tr>
     `;
