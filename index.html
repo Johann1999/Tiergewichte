@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' >⚖️</text></svg>">
 <title>TIERGEWICHTE</title>
 <style>
   :root {
@@ -146,7 +147,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v4</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v5</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -407,7 +408,7 @@ async function ladeBestand(silent) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const rows = parseCSV(await res.text());
     // Header: Ohrmarke, Rasse, Geschlecht
-    S.bestand = rows.slice(1).filter(r => r[0]?.trim()).map(r => ({
+    S.bestand = rows.slice(0).filter(r => r[0]?.trim()).map(r => ({
       nr: r[0].trim().padStart(5, '0'), rasse: r[1]?.trim() || '', geschlecht: r[2]?.trim() || ''
     }));
     saveS();
@@ -968,7 +969,7 @@ async function renderBestand() {
     // Lade Bestand + Gewichte + HI Tier Daten vom Sheet
     const bestandUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Bestand&t=${Date.now()}`;
     const bestandRes = await fetch(bestandUrl);
-    const bestandRows = bestandRes.ok ? parseCSV(await bestandRes.text()).slice(1) : [];
+    const bestandRows = bestandRes.ok ? parseCSV(await bestandRes.text()).slice(0) : [];
 
     // Lade letzte Gewichte
     const gewichteUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
