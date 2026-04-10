@@ -147,7 +147,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v7</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v8</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -301,6 +301,7 @@ let S = {
 function saveS() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} }
 function loadS() { try { const r = localStorage.getItem(KEY); if (r) S = {...S, ...JSON.parse(r)}; } catch(e) {} }
 loadS();
+S._selectedGruppe = [];
 
 // ── DATUM UTILS ─────────────────────────────────────
 function formatDatumKurz(s) {
@@ -751,6 +752,7 @@ async function wiegenGruppe() {
 
   // Reset
   S._selectedGruppe = [];
+  saveS();
   document.getElementById('inpGewichtGruppe').value = '';
   renderGruppeList();
   // ✅ Cache NOT nullen - oder nur aktualisieren wenn nötig
