@@ -147,7 +147,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v5</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v6</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -403,12 +403,12 @@ async function ladeBestand(silent) {
   const st = document.getElementById('sheetStatus');
   if (!silent) st.innerHTML = connLine('spin', 'Lade Bestand…');
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Bestand&t=${Date.now()}`;
+    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&headers=0&sheet=Bestand&t=${Date.now()}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const rows = parseCSV(await res.text());
     // Header: Ohrmarke, Rasse, Geschlecht
-    S.bestand = rows.slice(0).filter(r => r[0]?.trim()).map(r => ({
+    S.bestand = rows.slice(1).filter(r => r[0]?.trim()).map(r => ({
       nr: r[0].trim().padStart(5, '0'), rasse: r[1]?.trim() || '', geschlecht: r[2]?.trim() || ''
     }));
     saveS();
@@ -967,9 +967,9 @@ async function renderBestand() {
 
   try {
     // Lade Bestand + Gewichte + HI Tier Daten vom Sheet
-    const bestandUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Bestand&t=${Date.now()}`;
+    const bestandUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&headers=0&sheet=Bestand&t=${Date.now()}`;
     const bestandRes = await fetch(bestandUrl);
-    const bestandRows = bestandRes.ok ? parseCSV(await bestandRes.text()).slice(0) : [];
+    const bestandRows = bestandRes.ok ? parseCSV(await bestandRes.text()).slice(1) : [];
 
     // Lade letzte Gewichte
     const gewichteUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
