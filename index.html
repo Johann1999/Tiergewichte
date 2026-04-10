@@ -147,7 +147,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v6</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v7</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -409,7 +409,7 @@ async function ladeBestand(silent) {
     const rows = parseCSV(await res.text());
     // Header: Ohrmarke, Rasse, Geschlecht
     S.bestand = rows.slice(1).filter(r => r[0]?.trim()).map(r => ({
-      nr: r[0].trim().padStart(5, '0'), rasse: r[1]?.trim() || '', geschlecht: r[2]?.trim() || ''
+      nr: r[0].trim().padStart(5, '0'), rasse: r[1]?.trim() || '', geschlecht: r[2]?.trim().toLowerCase() || ''
     }));
     saveS();
     if (!silent) { st.innerHTML = connLine('ok', `${S.bestand.length} Tiere geladen`); toast('Bestand geladen ✓'); }
@@ -989,7 +989,7 @@ async function renderBestand() {
       .map(r => ({
         nr: r[0].trim().padStart(5, '0'),
         rasse: r[1]?.trim() || '–',
-        geschlecht: r[2]?.trim() || '–',
+        geschlecht: r[2]?.trim().toLowerCase() || '–',
         geburtsdatum: r[3]?.trim() || '',
         lom: r[4]?.trim() || '',
         letzterGewicht: latestWeights[r[0].trim()] || '–',
