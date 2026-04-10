@@ -146,7 +146,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v3</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v4</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -166,13 +166,10 @@
     <div class="card-label">Neues Tier erfassen</div>
     <label>Ohrmarke (letzte 5 Stellen)</label>
     <input type="text" id="inpOhrmarkeNeu" maxlength="5" inputmode="numeric" placeholder="z.B. 12345" oninput="this.value=this.value.replace(/\D/g,'')">
-    <div class="row2">
-      <div>
-        <label>Rasse</label>
-        <select id="selRasseNeu">
-          <option value="">– Wählen –</option>
-        </select>
-      </div>
+    <label>Rasse</label>
+    <select id="selRasseNeu">
+      <option value="">– Wählen –</option>
+    </select>
     <label>Eingangsgewicht (kg)</label>
     <input type="number" id="inpGewichtNeu" min="0" step="0.1" placeholder="z.B. 85">
     <button class="btn btn-accent" onclick="einstallen()">+ Tier einstallen</button>
