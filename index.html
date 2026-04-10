@@ -1,1186 +1,928 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>TIERGEWICHTE</title>
-<style>
-  :root {
-    --bg:       #0f1009;
-    --surface:  #181911;
-    --surface2: #1f2012;
-    --border:   #2a2b1a;
-    --text:     #e8e4d0;
-    --muted:    #7a7a58;
-    --accent:   #b8cc3a;
-    --green:    #6aaa3a;
-    --red:      #cc3a3a;
-    --gold:     #c9a94e;
-    --mono:     'Courier New', monospace;
-    --sans:     -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --r:        10px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiergewichte - Gewichtsverfolgung</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #ffffff;
+            --input-bg: #2d2d2d;
+            --border-color: #404040;
+            --accent-color: #4CAF50;
+            --accent-hover: #45a049;
+            --error-color: #f44336;
+            --warning-color: #ff9800;
+            --info-color: #2196F3;
+        }
 
-  .app-header {
-    display: flex; align-items: center; gap: 0.5rem;
-    padding: 0.6rem 0.75rem;
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 100;
-  }
-  .logo { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  .tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
-  .tab { flex: 1; min-width: 0; padding: 0.65rem 0.4rem; font-size: 0.72rem; font-weight: 600; text-align: center; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.15s; letter-spacing: 0.03em; }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            padding: 10px;
+        }
 
-  .page { display: none; padding: 0.4rem; padding-bottom: 2rem; }
-  .page.active { display: block; }
-  .page-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg); z-index: 300; overflow-y: auto; padding: 0.6rem; padding-bottom: 3rem; }
-  .page-overlay.active { display: block; }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
 
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 0.55rem; margin-bottom: 0.4rem; }
-  .card-label { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: var(--input-bg);
+            border-radius: 5px;
+        }
 
-  label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 0.2rem; font-weight: 500; }
-  select, input[type="number"], input[type="text"] {
-    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-    color: var(--text); font-family: var(--sans); font-size: 1.3rem; padding: 0.45rem 0.7rem;
-    margin-bottom: 0.35rem; appearance: none; -webkit-appearance: none;
-  }
-  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%237a7a68' stroke-width='1.8' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.9rem center; padding-right: 2.2rem; }
-  input:focus, select:focus { outline: none; border-color: var(--accent); }
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
+        header h1 {
+            font-size: 24px;
+            margin: 0;
+        }
 
-  .btn { display: block; width: 100%; padding: 0.75rem; border: none; border-radius: var(--r); font-family: var(--sans); font-size: 1.1rem; font-weight: 600; cursor: pointer; letter-spacing: 0.02em; transition: all 0.14s; margin-bottom: 0.4rem; }
-  .btn:active { transform: scale(0.97); filter: brightness(0.88); }
-  .btn-accent { background: var(--accent); color: #0f1009; }
-  .btn-green  { background: var(--green);  color: #0f1009; }
-  .btn-ghost  { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-  .btn-red    { background: transparent; color: var(--red); border: 1px solid var(--red); }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .header-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
 
-  /* Tier-Suche */
-  .search-wrap { position: relative; margin-bottom: 0.35rem; }
-  .search-wrap input { margin-bottom: 0; }
-  .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface2); border: 1px solid var(--accent); border-top: none; border-radius: 0 0 8px 8px; z-index: 50; max-height: 200px; overflow-y: auto; }
-  .suggestion-item { padding: 0.6rem 0.75rem; cursor: pointer; font-size: 1rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-  .suggestion-item:last-child { border-bottom: none; }
-  .suggestion-item:active, .suggestion-item:hover { background: var(--border); }
-  .suggestion-meta { font-size: 0.75rem; color: var(--muted); }
+        .sync-status {
+            font-size: 12px;
+            padding: 5px 10px;
+            background-color: var(--warning-color);
+            border-radius: 3px;
+            color: black;
+            font-weight: bold;
+        }
 
-  /* Tier-Info Box */
-  .tier-info { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r); padding: 0.55rem 0.7rem; margin-bottom: 0.35rem; display: none; }
-  .tier-info-row { display: flex; justify-content: space-between; align-items: center; }
-  .tier-info-name { font-family: var(--mono); font-size: 1rem; color: var(--accent); font-weight: 700; }
-  .tier-info-meta { font-size: 0.78rem; color: var(--muted); }
-  .tier-info-weight { font-family: var(--mono); font-size: 1.4rem; font-weight: 700; color: var(--text); }
-  .tier-info-gain { font-size: 0.78rem; margin-top: 0.2rem; }
-  .gain-pos { color: var(--green); }
-  .gain-neg { color: var(--red); }
+        .sync-status.synced {
+            background-color: var(--accent-color);
+            color: white;
+        }
 
-  /* Gruppen-Auswahl */
-  .group-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--bg); margin-bottom: 0.35rem; }
-  .group-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border); cursor: pointer; }
-  .group-item:last-child { border-bottom: none; }
-  .group-item.selected { background: var(--surface2); }
-  .group-check { width: 20px; height: 20px; border-radius: 5px; border: 2px solid var(--border); background: var(--bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; }
-  .group-item.selected .group-check { background: var(--accent); border-color: var(--accent); color: #0f1009; }
-  .group-item-num { font-family: var(--mono); font-size: 1rem; font-weight: 700; }
-  .group-item-meta { font-size: 0.75rem; color: var(--muted); }
-  .group-search { width: 100%; background: var(--bg); border: none; border-bottom: 1px solid var(--border); color: var(--text); font-size: 1rem; padding: 0.5rem 0.75rem; border-radius: var(--r) var(--r) 0 0; }
-  .group-search:focus { outline: none; border-bottom-color: var(--accent); }
-  .selected-count { font-family: var(--mono); font-size: 0.85rem; color: var(--accent); margin-bottom: 0.35rem; }
+        nav {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+        }
 
-  /* Log */
-  .log-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 0.55rem 0.7rem; margin-bottom: 0.4rem; }
-  .log-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.2rem; }
-  .log-num { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; color: var(--accent); }
-  .log-weight { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; color: var(--text); }
-  .log-meta { font-size: 0.75rem; color: var(--muted); display: flex; gap: 0.6rem; }
-  .badge { display: inline-block; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 700; font-family: var(--mono); letter-spacing: 0.05em; }
-  .b-sync { background: #1a2e1a; color: var(--green); }
-  .b-pend { background: #2a2000; color: var(--gold); }
+        nav button {
+            padding: 10px 20px;
+            background-color: transparent;
+            color: var(--text-color);
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
 
-  /* Bestand Tabelle */
-  .bestand-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  .bestand-table thead { background: var(--surface2); }
-  .bestand-table th { padding: 0.6rem; text-align: left; font-weight: 600; color: var(--accent); cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); }
-  .bestand-table th:hover { background: var(--border); }
-  .bestand-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
-  .bestand-table tr:hover { background: var(--surface2); }
-  .bestand-table tr.incomplete { background: rgba(204,58,58,0.1); }
-  .bestand-table tr.incomplete td { color: var(--red); }
-  .bestand-nr { font-family: var(--mono); font-weight: 600; color: var(--accent); }
-  .bestand-empty { text-align: center; padding: 2rem; color: var(--muted); }
+        nav button:hover {
+            background-color: var(--input-bg);
+            border-bottom-color: var(--accent-color);
+        }
 
-  /* Pending Banner */
-  #pendingBanner { background: #2a2000; border: 1px solid var(--gold); border-radius: var(--r); padding: 0.5rem 0.75rem; margin-bottom: 0.4rem; font-size: 0.82rem; color: var(--gold); display: none; }
+        nav button.active {
+            color: var(--accent-color);
+            border-bottom-color: var(--accent-color);
+            font-weight: bold;
+        }
 
-  /* Connection line */
-  .conn-line { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; padding: 0.3rem 0; }
-  .conn-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-  .conn-ok   .conn-dot { background: var(--green); }
-  .conn-err  .conn-dot { background: var(--red); }
-  .conn-spin .conn-dot { background: var(--gold); animation: pulse 0.8s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        .tab-content {
+            display: none;
+        }
 
-  .info-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.7rem; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.4rem; }
+        .tab-content.active {
+            display: block;
+        }
 
-  #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(3rem); background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; padding: 0.6rem 1.2rem; font-size: 0.9rem; font-weight: 600; z-index: 999; opacity: 0; transition: all 0.25s; white-space: nowrap; pointer-events: none; }
-  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  #toast.err  { border-color: var(--red); color: var(--red); }
+        .form-group {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
 
-  #syncDot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex-shrink: 0; display: none; cursor: default; margin-left: 0.4rem; }
+        .form-group label {
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: var(--text-color);
+        }
 
-  .empty { text-align: center; padding: 2rem 1rem; color: var(--muted); }
-  .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; }
-</style>
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 10px;
+            background-color: var(--input-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            font-size: 14px;
+            font-family: Arial, sans-serif;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 5px var(--accent-color);
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: var(--accent-hover);
+        }
+
+        button.secondary {
+            background-color: var(--input-bg);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+
+        button.secondary:hover {
+            background-color: var(--border-color);
+        }
+
+        button.danger {
+            background-color: var(--error-color);
+        }
+
+        button.danger:hover {
+            background-color: #da190b;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: var(--input-bg);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        table thead {
+            background-color: var(--border-color);
+        }
+
+        table th {
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+            color: var(--text-color);
+        }
+
+        table td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        table tbody tr:hover {
+            background-color: var(--border-color);
+        }
+
+        table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-content {
+            background-color: var(--input-bg);
+            margin: 10% auto;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: var(--text-color);
+        }
+
+        .close {
+            color: var(--text-color);
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .close:hover {
+            color: var(--accent-color);
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+
+        .alert-info {
+            background-color: var(--info-color);
+            color: white;
+        }
+
+        .alert-warning {
+            background-color: var(--warning-color);
+            color: black;
+        }
+
+        .alert-error {
+            background-color: var(--error-color);
+            color: white;
+        }
+
+        .alert-success {
+            background-color: var(--accent-color);
+            color: white;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .settings-section {
+            background-color: var(--bg-color);
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+        }
+
+        .settings-section h3 {
+            margin-bottom: 10px;
+            color: var(--accent-color);
+        }
+
+        .hit-status {
+            font-size: 12px;
+            margin-top: 4px;
+            min-height: 18px;
+            color: #aaa;
+        }
+
+        .hit-status.loading { color: var(--warning-color); }
+        .hit-status.found   { color: var(--accent-color); }
+        .hit-status.notfound{ color: var(--error-color); }
+
+        @media (max-width: 768px) {
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
+
+            header {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .header-right {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .modal-content {
+                width: 95%;
+                margin: 20% auto;
+            }
+
+            nav {
+                flex-wrap: wrap;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            table th,
+            table td {
+                padding: 5px;
+            }
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <header>
+            <h1>Tiergewichte</h1>
+            <div class="header-right">
+                <div class="sync-status" id="syncStatus">Bereit</div>
+                <button class="secondary" id="settingsBtn">&#9881;&#65039; Einstellungen</button>
+            </div>
+        </header>
 
-<div class="app-header">
-  <span style="font-size:1.1rem">⚖️</span>
-  <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v3</span>
-  <span id="syncDot" title="Nicht synchronisiert"></span>
-  <span style="flex:1"></span>
-  <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
-</div>
+        <nav>
+            <button class="nav-btn active" data-tab="entry">Eintrag</button>
+            <button class="nav-btn" data-tab="weighing">Wägen</button>
+            <button class="nav-btn" data-tab="group">Gruppengewicht</button>
+            <button class="nav-btn" data-tab="inventory">Bestand</button>
+        </nav>
 
-<div class="tabs">
-  <div class="tab active" data-tab="einstallen">Einstallen</div>
-  <div class="tab" data-tab="wiegen">Wiegen</div>
-  <div class="tab" data-tab="gruppe">Gruppe</div>
-  <div class="tab" data-tab="bestand">Bestand</div>
-</div>
-
-<!-- EINSTALLEN -->
-<div class="page active" id="page-einstallen">
-  <div id="pendingBanner"><span>⏳</span> <span id="pendingText"></span></div>
-  <div class="card">
-    <div class="card-label">Neues Tier erfassen</div>
-    <label>Ohrmarke (letzte 5 Stellen)</label>
-    <input type="text" id="inpOhrmarkeNeu" maxlength="5" inputmode="numeric" placeholder="z.B. 12345" oninput="this.value=this.value.replace(/\D/g,'')">
-    <div class="row2">
-      <div>
-        <label>Rasse</label>
-        <select id="selRasseNeu">
-          <option value="">– Wählen –</option>
-        </select>
-      </div>
-      <div>
-        <label>Geschlecht</label>
-        <select id="selGeschlechtNeu">
-          <option value="">– Wählen –</option>
-          <option value="m">Männlich</option>
-          <option value="w">Weiblich</option>
-        </select>
-      </div>
-    </div>
-    <label>Eingangsgewicht (kg)</label>
-    <input type="number" id="inpGewichtNeu" min="0" step="0.1" placeholder="z.B. 85">
-    <button class="btn btn-accent" onclick="einstallen()">+ Tier einstallen</button>
-  </div>
-</div>
-
-<!-- WIEGEN -->
-<div class="page" id="page-wiegen">
-  <div class="card">
-    <label>Ohrmarke suchen</label>
-    <div class="search-wrap">
-      <input type="text" id="inpSuche" inputmode="numeric" placeholder="Nummer eingeben…" oninput="onSucheInput()" autocomplete="off">
-      <div class="suggestions" id="suggestions" style="display:none"></div>
-    </div>
-    <div class="tier-info" id="tierInfo">
-      <div class="tier-info-row">
-        <div>
-          <div class="tier-info-name" id="tiInfoNum">–</div>
-          <div class="tier-info-meta" id="tiInfoMeta">–</div>
+        <!-- Entry Tab -->
+        <div id="entry" class="tab-content active">
+            <h2>Neues Tier erfassen</h2>
+            <div class="form-group">
+                <label for="earTag">Ohrmarke:</label>
+                <input type="text" id="earTag" placeholder="z.B. 123456">
+                <div id="hitStatus" class="hit-status"></div>
+            </div>
+            <div class="form-group">
+                <label for="breed">Rasse:</label>
+                <select id="breed"></select>
+            </div>
+            <div class="form-group">
+                <label for="gender">Geschlecht:</label>
+                <select id="gender">
+                    <option value="">-- Wählen --</option>
+                    <option value="m">Männlich</option>
+                    <option value="f">Weiblich</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="entryWeight">Eingangsgewicht (kg):</label>
+                <input type="number" id="entryWeight" step="0.1" placeholder="z.B. 25.5">
+            </div>
+            <div class="button-group">
+                <button id="addAnimalBtn">Tier hinzufügen</button>
+                <button class="secondary" id="viewEnteredAnimalsBtn">Erfasste Tiere anzeigen</button>
+            </div>
         </div>
-        <div style="text-align:right">
-          <div class="tier-info-weight" id="tiInfoWeight">– kg</div>
-          <div class="tier-info-gain" id="tiInfoGain"></div>
+
+        <!-- Weighing Tab -->
+        <div id="weighing" class="tab-content">
+            <h2>Wägen</h2>
+            <div class="form-group">
+                <label for="animalSelect">Tier wählen:</label>
+                <select id="animalSelect"></select>
+            </div>
+            <div class="form-group">
+                <label for="weighDate">Datum:</label>
+                <input type="date" id="weighDate">
+            </div>
+            <div class="form-group">
+                <label for="weighEvent">Ereignis:</label>
+                <select id="weighEvent">
+                    <option value="">-- Wählen --</option>
+                    <option value="Einstallung">Einstallung</option>
+                    <option value="Regulär">Regulär</option>
+                    <option value="Verkauf">Verkauf</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="weight">Gewicht (kg):</label>
+                <input type="number" id="weight" step="0.1" placeholder="z.B. 35.2">
+            </div>
+            <button id="recordWeightBtn">Gewicht erfassen</button>
         </div>
-      </div>
+
+        <!-- Group Weighing Tab -->
+        <div id="group" class="tab-content">
+            <h2>Gruppengewicht</h2>
+            <p>Geben Sie das Gesamtgewicht mehrerer Tiere ein. Das Gewicht wird pro Tier verteilt.</p>
+            <div class="form-group">
+                <label for="groupAnimals">Tiere (kommagetrennte Ohrmarken):</label>
+                <textarea id="groupAnimals" placeholder="z.B. 123,124,125"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="groupWeight">Gesamtgewicht (kg):</label>
+                <input type="number" id="groupWeight" step="0.1" placeholder="z.B. 105.0">
+            </div>
+            <div class="form-group">
+                <label for="groupDate">Datum:</label>
+                <input type="date" id="groupDate">
+            </div>
+            <button id="recordGroupWeightBtn">Gruppengewicht erfassen</button>
+        </div>
+
+        <!-- Inventory Tab -->
+        <div id="inventory" class="tab-content">
+            <h2>Bestand</h2>
+            <button id="loadInventoryBtn">Bestand laden</button>
+            <div id="inventoryTable"></div>
+        </div>
     </div>
-    <label>Ereignis</label>
-    <select id="selEreignis">
-      <option value="">– Wählen –</option>
-    </select>
-    <label>Gewicht (kg)</label>
-    <input type="number" id="inpGewicht" min="0" step="0.1" placeholder="z.B. 120">
-    <button class="btn btn-green" id="btnWiegen" onclick="wiegen()" disabled>✓ Gewicht speichern</button>
-  </div>
-</div>
 
-<!-- GRUPPENWIEGEN -->
-<div class="page" id="page-gruppe">
-  <div class="card">
-    <div class="card-label">Tiere auswählen</div>
-    <input class="group-search" type="text" id="gruppeFilter" placeholder="Filtern…" oninput="filterGruppe()">
-    <div class="group-list" id="gruppeList"></div>
-    <div class="selected-count" id="selectedCount">0 Tiere gewählt</div>
-  </div>
-  <div class="card">
-    <label>Ereignis</label>
-    <select id="selEreignisGruppe">
-      <option value="">– Wählen –</option>
-    </select>
-    <label>Gesamtgewicht (kg)</label>
-    <input type="number" id="inpGewichtGruppe" min="0" step="0.1" placeholder="z.B. 1200">
-    <div id="gruppeInfo" style="font-size:0.82rem;color:var(--muted);margin-bottom:0.4rem;display:none"></div>
-    <button class="btn btn-green" onclick="wiegenGruppe()">✓ Gruppe speichern</button>
-  </div>
-</div>
-
-<!-- BESTAND PAGE -->
-<div class="page" id="page-bestand">
-  <div id="pendingBanner" style="background:#2a2000;border:1px solid var(--gold);border-radius:var(--r);padding:0.5rem 0.75rem;margin-bottom:0.4rem;font-size:0.82rem;color:var(--gold);display:none">
-    <span>⏳</span> <span id="pendingText"></span>
-  </div>
-  
-  <div class="card" style="padding:0.4rem">
-    <div style="display:flex;gap:0.4rem;margin-bottom:0.4rem;flex-wrap:wrap">
-      <button class="btn btn-accent" onclick="syncBestandFromHIT()" style="flex:1;min-width:150px;margin-bottom:0">🔄 HIT Daten sync</button>
-      <button class="btn btn-ghost" onclick="toggleBestandSort()" style="flex:1;min-width:150px;margin-bottom:0">⇅ Sortierung</button>
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeSettings">&times;</span>
+            <div class="modal-header">Einstellungen</div>
+            <div class="settings-grid">
+                <div class="settings-section">
+                    <h3>Google Sheets</h3>
+                    <div class="form-group">
+                        <label for="sheetUrl">Sheet URL:</label>
+                        <input type="text" id="sheetUrl" placeholder="Google Sheet URL">
+                    </div>
+                    <button id="saveSheetBtn">Speichern</button>
+                </div>
+                <div class="settings-section">
+                    <h3>Google Apps Script</h3>
+                    <div class="form-group">
+                        <label for="appsScriptUrl">Apps Script URL:</label>
+                        <input type="text" id="appsScriptUrl" placeholder="Apps Script Deployment URL">
+                    </div>
+                    <button id="saveAppsScriptBtn">Speichern</button>
+                </div>
+            </div>
+            <div class="settings-section">
+                <h3>Rassen-Verwaltung</h3>
+                <div class="form-group">
+                    <label for="breedInput">Neue Rasse:</label>
+                    <input type="text" id="breedInput" placeholder="z.B. Angeln Rind">
+                </div>
+                <button id="addBreedBtn">Rasse hinzufügen</button>
+                <div id="breedList"></div>
+            </div>
+        </div>
     </div>
-    
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-bottom:0.4rem">
-      <input type="text" id="filterOhrmarke" placeholder="Filter Ohrmarke…" style="margin-bottom:0" oninput="filterBestand()">
-      <input type="text" id="filterRasse" placeholder="Filter Rasse…" style="margin-bottom:0" oninput="filterBestand()">
-    </div>
-  </div>
-
-  <div id="bestandTabelle" style="overflow-x:auto">
-    <!-- Wird mit JavaScript gefüllt -->
-  </div>
-</div>
-
-<!-- EINSTELLUNGEN OVERLAY -->
-<div class="page-overlay" id="page-setup">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem">
-    <span style="font-family:var(--mono);font-size:0.8rem;color:var(--accent)">EINSTELLUNGEN</span>
-    <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer">✕</button>
-  </div>
-  <div class="card">
-    <div class="card-label">Google Sheets</div>
-    <label>Sheet ID</label>
-    <input type="text" id="inpSheetId" placeholder="1xmZ…" oninput="saveCfg()">
-    <div id="sheetStatus"></div>
-    <button class="btn btn-accent" onclick="ladeBestand(false)">Verbinden & Bestand laden</button>
-  </div>
-  <div class="card">
-    <div class="card-label">Apps Script</div>
-    <div class="info-box">
-      Das universelle Apps Script speichert Gewichte, Bestandsdaten und HI Tier Integrationen.
-    </div>
-    <label>Apps Script URL</label>
-    <input type="text" id="inpScriptUrl" placeholder="https://script.google.com/macros/s/…/exec" oninput="saveCfg()">
-    <div id="scriptStatus"></div>
-    <button class="btn btn-accent" onclick="testScript()">Verbindung testen</button>
-  </div>
-  <div class="card">
-    <div class="card-label">Rassen verwalten</div>
-    <div class="info-box">Trage Rassen im Sheet-Tab <strong>Rassen</strong> ein (Spalte A). Sie werden automatisch geladen.</div>
-    <div id="rassenStatus" style="font-size:0.82rem;color:var(--muted)"></div>
-  </div>
-  <div class="card">
-    <button class="btn btn-red" onclick="resetAlles()">Lokale Daten löschen</button>
-  </div>
-</div>
-
-<div id="toast"></div>
-
-<script>
-// ── STATE ───────────────────────────────────────────
-const KEY = 'tiergewichte_v1';
-let S = {
-  sheetId:   '1pPv0UCSSlTnOCSRo-5Dvggf04grPyHqVnauNyytEkIg',
-  scriptUrl: 'https://script.google.com/macros/s/AKfycbxGDiZ8O1FKzANCDP5nNBD6TFMu8QkHI5nTNvRvou5fOResGW13jns4qgQwRChAdkOR/exec',
-  bestand:   [],
-  rassen:    [],
-  ereignisse:[],
-  log:       [],
-  _selectedGruppe: [],
-};
-
-function saveS() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} }
-function loadS() { try { const r = localStorage.getItem(KEY); if (r) S = {...S, ...JSON.parse(r)}; } catch(e) {} }
-loadS();
-
-// ── DATUM UTILS ─────────────────────────────────────
-function formatDatumKurz(s) {
-  if (!s) return '–';
-  s = String(s).trim();
-  // Google gviz Format: Date(2020,1,18) – Monat ist 0-basiert!
-  let m = s.match(/^Date\((\d{4}),(\d{1,2}),(\d{1,2})\)/);
-  if (m) {
-    const dd = String(parseInt(m[3])).padStart(2,'0');
-    const mm = String(parseInt(m[2]) + 1).padStart(2,'0');
-    const yy = m[1].slice(2);
-    return dd + '.' + mm + '.' + yy;
-  }
-  // DD.MM.YYYY → DD.MM.YY
-  m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if (m) return m[1].padStart(2,'0') + '.' + m[2].padStart(2,'0') + '.' + m[3].slice(2);
-  // YYYY-MM-DD → DD.MM.YY
-  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return m[3] + '.' + m[2] + '.' + m[1].slice(2);
-  return s;
-}
-function datumHeute() {
-  const d = new Date();
-  return String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+d.getFullYear();
-}
-function parseDatum(s) {
-  if (!s) return '';
-  s = String(s).trim();
-  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return m[3]+'.'+m[2]+'.'+m[1];
-  m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-  if (m) return m[1].padStart(2,'0')+'.'+m[2].padStart(2,'0')+'.'+m[3];
-  return s;
-}
-function datumToDate(s) {
-  const p = parseDatum(s).split('.');
-  if (p.length < 3) return null;
-  return new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
-}
-
-// ── BOOT ────────────────────────────────────────────
-if (S.sheetId) document.getElementById('inpSheetId').value = S.sheetId;
-if (S.scriptUrl) document.getElementById('inpScriptUrl').value = S.scriptUrl;
-if (S.hiTierScriptUrl) {
-  const el = document.getElementById('inpHITierScriptUrl');
-  if (el) el.value = S.hiTierScriptUrl;
-}
-
-if (S.sheetId) startBoot();
-updateSyncDot();
-renderLog();
-
-async function startBoot() {
-  await Promise.all([ladeBestand(true), ladeEreignisse(), ladeRassen()]);
-}
-
-// ── TABS ────────────────────────────────────────────
-document.querySelectorAll('.tab').forEach(t => {
-  t.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-    document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
-    t.classList.add('active');
-    document.getElementById('page-' + t.dataset.tab).classList.add('active');
-    if (t.dataset.tab === 'gruppe') renderGruppeList();
-    if (t.dataset.tab === 'bestand') renderBestand();
-  });
-});
-
-function toggleSetup() { document.getElementById('page-setup').classList.toggle('active'); }
-function toggleLog() {
-  const el = document.getElementById('page-log');
-  if (!el.classList.contains('active')) renderLog();
-  el.classList.toggle('active');
-}
-
-// ── CONFIG ──────────────────────────────────────────
-function saveCfg() {
-  S.sheetId   = document.getElementById('inpSheetId').value.trim();
-  S.scriptUrl = document.getElementById('inpScriptUrl').value.trim();
-  saveS();
-}
-
-function connLine(type, msg) {
-  return `<div class="conn-line conn-${type}"><div class="conn-dot"></div><span>${msg}</span></div>`;
-}
-
-async function testScript() {
-  const st = document.getElementById('scriptStatus');
-  st.innerHTML = connLine('spin', 'Teste…');
-  try {
-    const res = await fetch(S.scriptUrl + '?ping=1');
-    const txt = await res.text();
-    st.innerHTML = connLine('ok', 'Verbindung OK');
-  } catch(e) { st.innerHTML = connLine('err', 'Fehler – URL prüfen'); }
-}
-
-// ── SHEET LADEN ─────────────────────────────────────
-async function ladeBestand(silent) {
-  if (!S.sheetId) return;
-  const st = document.getElementById('sheetStatus');
-  if (!silent) st.innerHTML = connLine('spin', 'Lade Bestand…');
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Bestand&t=${Date.now()}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const rows = parseCSV(await res.text());
-    // Header: Ohrmarke, Rasse, Geschlecht
-    S.bestand = rows.slice(1).filter(r => r[0]?.trim()).map(r => ({
-      nr: r[0].trim().padStart(5, '0'), rasse: r[1]?.trim() || '', geschlecht: r[2]?.trim() || ''
-    }));
-    saveS();
-    if (!silent) { st.innerHTML = connLine('ok', `${S.bestand.length} Tiere geladen`); toast('Bestand geladen ✓'); }
-  } catch(e) {
-    if (!silent) st.innerHTML = connLine('err', 'Fehler: ' + e.message);
-  }
-}
-
-async function ladeEreignisse() {
-  if (!S.sheetId) return;
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Ereignisse&t=${Date.now()}`;
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const rows = parseCSV(await res.text());
-    S.ereignisse = rows.slice(1).map(r => r[0]?.trim()).filter(Boolean);
-    saveS();
-    fuelleEreignisse();
-  } catch(e) {}
-}
-
-async function ladeRassen() {
-  if (!S.sheetId) return;
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Rassen&t=${Date.now()}`;
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const rows = parseCSV(await res.text());
-    S.rassen = rows.slice(1).map(r => r[0]?.trim()).filter(Boolean);
-    saveS();
-    fuelleRassen();
-    document.getElementById('rassenStatus').textContent = S.rassen.length + ' Rassen geladen';
-  } catch(e) {}
-}
-
-function fuelleEreignisse() {
-  ['selEreignis','selEreignisGruppe'].forEach(id => {
-    const sel = document.getElementById(id);
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">– Wählen –</option>';
-    S.ereignisse.forEach(e => {
-      const o = document.createElement('option');
-      o.value = o.textContent = e;
-      sel.appendChild(o);
-    });
-    if (cur) sel.value = cur;
-  });
-}
-
-function fuelleRassen() {
-  const sel = document.getElementById('selRasseNeu');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">– Wählen –</option>';
-  S.rassen.forEach(r => {
-    const o = document.createElement('option');
-    o.value = o.textContent = r;
-    sel.appendChild(o);
-  });
-  if (cur) sel.value = cur;
-}
-
-// ── SHEET SUCHE ─────────────────────────────────────
-let gewichteCache = null;
-
-async function ladeGewichteCache() {
-  if (!S.sheetId) return;
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const rows = parseCSV(await res.text());
-    // Header: Datum, Ohrmarke, Gewicht, Ereignis
-    gewichteCache = rows.slice(1).filter(r => r[0] && r[1]).map(r => ({
-      datum: parseDatum(r[0]), nr: r[1].trim().padStart(5, '0'), gewicht: parseFloat(r[2]) || 0, ereignis: r[3]?.trim() || ''
-    }));
-  } catch(e) {}
-}
-
-function getLetzteWaegung(nr) {
-  if (!gewichteCache) return null;
-  const eintraege = gewichteCache.filter(e => e.nr === nr).sort((a,b) => {
-    const da = datumToDate(a.datum), db = datumToDate(b.datum);
-    return db - da;
-  });
-  return eintraege[0] || null;
-}
-
-// ── TIER SUCHE ──────────────────────────────────────
-let selectedTier = null;
-
-function onSucheInput() {
-  const val = document.getElementById('inpSuche').value.trim();
-  const box  = document.getElementById('suggestions');
-  document.getElementById('tierInfo').style.display = 'none';
-  document.getElementById('btnWiegen').disabled = true;
-  selectedTier = null;
-
-  if (!val) { box.style.display = 'none'; return; }
-
-  const matches = S.bestand.filter(t => t.nr.includes(val)).slice(0, 8);
-  if (!matches.length) { box.style.display = 'none'; return; }
-
-  box.innerHTML = matches.map(t => {
-    const lw = getLetzteWaegung(t.nr);
-    const meta = lw ? `${lw.gewicht} kg · ${lw.datum}` : 'Noch nicht gewogen';
-    return `<div class="suggestion-item" onclick="selectTier('${t.nr}')">
-      <div>
-        <span style="font-family:var(--mono);font-weight:700">${t.nr}</span>
-        <span style="font-size:0.8rem;color:var(--muted);margin-left:0.4rem">${t.rasse} ${t.geschlecht}</span>
-      </div>
-      <span class="suggestion-meta">${meta}</span>
-    </div>`;
-  }).join('');
-  box.style.display = 'block';
-}
-
-function selectTier(nr) {
-  const tier = S.bestand.find(t => t.nr === nr);
-  if (!tier) return;
-  selectedTier = tier;
-  document.getElementById('inpSuche').value = nr;
-  document.getElementById('suggestions').style.display = 'none';
-
-  const lw = getLetzteWaegung(nr);
-  const info = document.getElementById('tierInfo');
-  document.getElementById('tiInfoNum').textContent = nr;
-  document.getElementById('tiInfoMeta').textContent = `${tier.rasse} · ${tier.geschlecht === 'm' ? '♂' : '♀'}`;
-
-  if (lw) {
-    document.getElementById('tiInfoWeight').textContent = lw.gewicht + ' kg';
-    // Tageszunahme
-    const today = new Date(); today.setHours(0,0,0,0);
-    const lwDate = datumToDate(lw.datum);
-    if (lwDate) {
-      const tage = Math.max(1, Math.round((today - lwDate) / 86400000));
-      const aktuell = parseFloat(document.getElementById('inpGewicht').value);
-      if (!isNaN(aktuell) && aktuell > 0) {
-        const zunahme = ((aktuell - lw.gewicht) / tage).toFixed(0);
-        const cls = zunahme >= 0 ? 'gain-pos' : 'gain-neg';
-        document.getElementById('tiInfoGain').innerHTML = `<span class="${cls}">${zunahme >= 0 ? '+' : ''}${zunahme} g/Tag (${tage}d)</span>`;
-      } else {
-        document.getElementById('tiInfoGain').innerHTML = `<span style="color:var(--muted)">${tage} Tage seit letzter Wägung</span>`;
-      }
-    }
-  } else {
-    document.getElementById('tiInfoWeight').textContent = '– kg';
-    document.getElementById('tiInfoGain').innerHTML = '<span style="color:var(--muted)">Noch nicht gewogen</span>';
-  }
-  info.style.display = 'block';
-  document.getElementById('btnWiegen').disabled = false;
-  document.getElementById('inpGewicht').focus();
-}
-
-// Update Tageszunahme live beim Eingeben
-document.getElementById('inpGewicht').addEventListener('input', () => {
-  if (selectedTier) selectTier(selectedTier.nr);
-});
-
-// Click outside closes suggestions
-document.addEventListener('click', e => {
-  if (!e.target.closest('.search-wrap')) document.getElementById('suggestions').style.display = 'none';
-});
-
-// ── EINSTALLEN ──────────────────────────────────────
-async function einstallen() {
-  const nr        = document.getElementById('inpOhrmarkeNeu').value.trim().padStart(5, '0');
-  const rasse     = document.getElementById('selRasseNeu').value;
-  const geschlecht= document.getElementById('selGeschlechtNeu').value;
-  const gewicht   = parseFloat(document.getElementById('inpGewichtNeu').value);
-
-  if (!nr || nr.length !== 5) { toast('Bitte 5-stellige Ohrmarke eingeben', true); return; }
-  if (!rasse)      { toast('Bitte Rasse wählen', true); return; }
-  if (!geschlecht) { toast('Bitte Geschlecht wählen', true); return; }
-  if (isNaN(gewicht) || gewicht <= 0) { toast('Bitte Gewicht eingeben', true); return; }
-
-  if (S.bestand.find(t => t.nr === nr)) {
-    if (!confirm(`Tier ${nr} ist bereits im Bestand. Trotzdem eintragen?`)) return;
-  }
-
-  const entry = { id: Date.now(), ts: new Date().toISOString(), nr, rasse, geschlecht, gewicht, ereignis: 'Einstallung', typ: 'einstallen', synced: false };
-  S.log.unshift(entry);
-  S.bestand.push({ nr, rasse, geschlecht });
-  saveS();
-  updateSyncDot();
-
-  const btn = document.querySelector('#page-einstallen .btn-accent');
-  btn.disabled = true; btn.textContent = '⏳ Speichere…';
-
-  const ok = await sendeEintrag(entry);
-  if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
-
-  btn.disabled = false; btn.textContent = '+ Tier einstallen';
-  toast(ok ? 'Eingestallt ✓' : 'Lokal gespeichert – wird später gesendet', !ok);
-
-  // Felder leeren
-  document.getElementById('inpOhrmarkeNeu').value = '';
-  document.getElementById('inpGewichtNeu').value = '';
-  gewichteCache = null; // invalidieren
-}
-
-// ── WIEGEN ──────────────────────────────────────────
-async function wiegen() {
-  if (!selectedTier) { toast('Bitte Tier auswählen', true); return; }
-  const gewicht  = parseFloat(document.getElementById('inpGewicht').value);
-  const ereignis = document.getElementById('selEreignis').value;
-
-  if (isNaN(gewicht) || gewicht <= 0) { toast('Bitte Gewicht eingeben', true); return; }
-  if (!ereignis) { toast('Bitte Ereignis wählen', true); return; }
-
-  const entry = { id: Date.now(), ts: new Date().toISOString(), nr: selectedTier.nr, gewicht, ereignis, typ: 'wiegen', synced: false };
-  S.log.unshift(entry);
-  saveS();
-  updateSyncDot();
-
-  const btn = document.getElementById('btnWiegen');
-  btn.disabled = true; btn.textContent = '⏳ Speichere…';
-
-  // ✅ Schneller: Reset UI sofort (nicht warten auf sync)
-  const resetUI = () => {
-    document.getElementById('inpSuche').value = '';
-    document.getElementById('inpGewicht').value = '';
-    document.getElementById('tierInfo').style.display = 'none';
-    document.getElementById('btnWiegen').disabled = true;
-    selectedTier = null;
-  };
-
-  // ✅ Sende parallel (nicht blocking)
-  const ok = await sendeEintrag(entry);
-  if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
-
-  btn.disabled = false; btn.textContent = '✓ Gewicht speichern';
-  toast(ok ? 'Gewogen ✓' : 'Lokal gespeichert – wird später gesendet', !ok);
-
-  // ✅ Cache NICHT nullen - nur aktuell gewiegte Tier entfernen wenn vorhanden
-  if (gewichteCache) {
-    gewichteCache.unshift({
-      datum: entry.ts.slice(0,10).split('-').reverse().join('.'),
-      nr: entry.nr,
-      gewicht: entry.gewicht,
-      ereignis: entry.ereignis
-    });
-  }
-
-  // Reset
-  resetUI();
-}
-
-// ── GRUPPENWIEGEN ───────────────────────────────────
-function renderGruppeList() {
-  const filter = document.getElementById('gruppeFilter').value.toLowerCase();
-  const liste  = document.getElementById('gruppeList');
-  const tiere  = S.bestand.filter(t => !filter || t.nr.includes(filter) || t.rasse.toLowerCase().includes(filter));
-
-  if (!tiere.length) {
-    liste.innerHTML = '<div style="padding:1rem;color:var(--muted);font-size:0.85rem;text-align:center">Keine Tiere gefunden</div>';
-    return;
-  }
-
-  liste.innerHTML = tiere.map(t => {
-    const sel = S._selectedGruppe.includes(t.nr);
-    return `<div class="group-item ${sel ? 'selected' : ''}" onclick="toggleGruppe('${t.nr}')">
-      <div class="group-check">${sel ? '✓' : ''}</div>
-      <div>
-        <div class="group-item-num">${t.nr}</div>
-        <div class="group-item-meta">${t.rasse} · ${t.geschlecht === 'm' ? '♂' : '♀'}</div>
-      </div>
-    </div>`;
-  }).join('');
-
-  updateSelectedCount();
-}
-
-function toggleGruppe(nr) {
-  const idx = S._selectedGruppe.indexOf(nr);
-  if (idx >= 0) S._selectedGruppe.splice(idx, 1);
-  else S._selectedGruppe.push(nr);
-  renderGruppeList();
-}
-
-function filterGruppe() { renderGruppeList(); }
-
-function updateSelectedCount() {
-  const n = S._selectedGruppe.length;
-  document.getElementById('selectedCount').textContent = n + ' Tier' + (n !== 1 ? 'e' : '') + ' gewählt';
-  // Gewicht pro Tier anzeigen
-  const gesamt = parseFloat(document.getElementById('inpGewichtGruppe').value);
-  const info   = document.getElementById('gruppeInfo');
-  if (n > 0 && !isNaN(gesamt) && gesamt > 0) {
-    const proTier = (gesamt / n).toFixed(1);
-    info.textContent = `→ ${proTier} kg pro Tier`;
-    info.style.display = 'block';
-  } else {
-    info.style.display = 'none';
-  }
-}
-
-document.getElementById('inpGewichtGruppe').addEventListener('input', updateSelectedCount);
-
-async function wiegenGruppe() {
-  const n       = S._selectedGruppe.length;
-  const gesamt  = parseFloat(document.getElementById('inpGewichtGruppe').value);
-  const ereignis= document.getElementById('selEreignisGruppe').value;
-
-  if (n === 0) { toast('Bitte Tiere auswählen', true); return; }
-  if (isNaN(gesamt) || gesamt <= 0) { toast('Bitte Gesamtgewicht eingeben', true); return; }
-  if (!ereignis) { toast('Bitte Ereignis wählen', true); return; }
-
-  const proTier = gesamt / n;
-  const btn = document.querySelector('#page-gruppe .btn-green');
-  btn.disabled = true; btn.textContent = '⏳ Speichere…';
-
-  // ✅ PARALLEL statt seriell: Alle Anfragen gleichzeitig senden
-  const entries = S._selectedGruppe.map(nr => ({
-    id: Date.now() + Math.random(),
-    ts: new Date().toISOString(),
-    nr,
-    gewicht: parseFloat(proTier.toFixed(1)),
-    ereignis,
-    typ: 'gruppe',
-    synced: false
-  }));
-
-  S.log.unshift(...entries);
-  saveS();
-
-  // ✅ Alle Requests parallel senden (nicht seriell!)
-  const results = await Promise.all(
-    entries.map(entry => sendeEintrag(entry))
-  );
-
-  // Update sync-Status basierend auf Ergebnisse
-  results.forEach((ok, i) => {
-    if (ok) { entries[i].synced = true; }
-  });
-  saveS();
-  updateSyncDot();
-
-  const erfolge = results.filter(ok => ok).length;
-  btn.disabled = false; btn.textContent = '✓ Gruppe speichern';
-  toast(`${erfolge}/${n} Tiere gespeichert ✓`);
-
-  // Reset
-  S._selectedGruppe = [];
-  document.getElementById('inpGewichtGruppe').value = '';
-  renderGruppeList();
-  // ✅ Cache NOT nullen - oder nur aktualisieren wenn nötig
-}
-
-// ── SENDEN ──────────────────────────────────────────
-async function sendeEintrag(entry) {
-  if (!S.scriptUrl) return false;
-  try {
-    // Gewicht-Eintrag (immer)
-    const gewichtRequest = sendToScript({
-      tab: 'Gewichte',
-      f1: entry.ts.slice(0,10).split('-').reverse().join('.'), // dd.mm.yyyy
-      f2: entry.nr,
-      f3: entry.gewicht,
-      f4: entry.ereignis || 'Einstallung'
-    });
-    
-    // Bei Einstallung auch Bestand schreiben (parallel!)
-    let bestandPromise = Promise.resolve(true);
-    if (entry.typ === 'einstallen') {
-      bestandPromise = sendToScript({
-        tab: 'Bestand',
-        f1: entry.nr,
-        f2: entry.rasse,
-        f3: entry.geschlecht
-      });
-    }
-    
-    // ✅ Parallel warten (nicht serial)
-    const [ok1, ok2] = await Promise.all([gewichtRequest, bestandPromise]);
-    return ok1;
-  } catch(e) { return false; }
-}
-
-async function sendToScript(params) {
-  if (!S.scriptUrl) return false;
-  
-  // ✅ Konvertiere numerische Felder vor dem Senden
-  const cleanParams = {};
-  for (const [key, value] of Object.entries(params)) {
-    if (key.startsWith('f')) {
-      // f1, f2, f3... sind Datenwerte → intelligent konvertieren
-      const num = parseFloat(value);
-      cleanParams[key] = !isNaN(num) && value !== '' ? num : value;
-    } else {
-      // Andere Keys (tab, mode, etc.) als String
-      cleanParams[key] = value;
-    }
-  }
-  
-  const url = S.scriptUrl + '?' + new URLSearchParams(cleanParams).toString();
-  try {
-    const res = await fetch(url, { mode: 'no-cors' });
-    return true;
-  } catch(e) { 
-    return false; 
-  }
-}
-
-// ── PENDING SYNC ────────────────────────────────────
-async function checkPending() {
-  const unsent = S.log.filter(e => !e.synced);
-  if (!unsent.length) return;
-  const banner = document.getElementById('pendingBanner');
-  banner.style.display = 'block';
-  document.getElementById('pendingText').textContent = `${unsent.length} Eintrag${unsent.length>1?'e':''} ausstehend`;
-
-  for (const entry of unsent) {
-    const ok = await sendeEintrag(entry);
-    if (ok) { entry.synced = true; saveS(); }
-  }
-  updateSyncDot();
-  const still = S.log.filter(e => !e.synced).length;
-  if (!still) { banner.style.display = 'none'; toast('Alle Einträge synchronisiert ✓'); }
-  else document.getElementById('pendingText').textContent = `${still} Eintrag${still>1?'e':''} noch ausstehend`;
-}
-
-window.addEventListener('online', () => { toast('Netz wieder da…'); checkPending(); });
-
-function updateSyncDot() {
-  const dot = document.getElementById('syncDot');
-  const n = S.log.filter(e => !e.synced).length;
-  dot.style.display = n > 0 ? 'block' : 'none';
-  dot.title = n > 0 ? n + ' nicht synchronisiert' : '';
-}
-
-// ── LOG RENDERN ─────────────────────────────────────
-async function renderLog() {
-  const el = document.getElementById('logListe');
-  el.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:1rem">Lade…</div>';
-
-  let sheetRows = [];
-  if (S.sheetId) {
-    try {
-      const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const rows = parseCSV(await res.text());
-        sheetRows = rows.slice(1).reverse().map(r => ({
-          datum: r[0]||'', nr: r[1]||'', gewicht: r[2]||'', ereignis: r[3]||'', fromSheet: true
-        }));
-      }
-    } catch(e) {}
-  }
-
-  const local = S.log.filter(e => !e.synced).map(e => ({
-    datum: parseDatum(e.ts?.slice(0,10)), nr: e.nr, gewicht: e.gewicht, ereignis: e.ereignis,
-    synced: false, fromSheet: false
-  }));
-
-  const all = [...local, ...sheetRows];
-  if (!all.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">⚖️</div>Noch keine Einträge</div>'; return; }
-
-  el.innerHTML = all.map(e => {
-    const badge = e.fromSheet
-      ? `<span class="badge b-sync">✓ Sheets</span>`
-      : `<span class="badge b-pend">⏳ ausstehend</span>`;
-    return `<div class="log-item">
-      <div class="log-top">
-        <span class="log-num">${e.nr}</span>
-        <span class="log-weight">${e.gewicht} kg</span>
-      </div>
-      <div class="log-meta">
-        <span>${e.datum}</span>
-        <span>${e.ereignis}</span>
-        <span style="margin-left:auto">${badge}</span>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── CSV PARSER ──────────────────────────────────────
-function parseCSV(text) {
-  return text.trim().split('\n').map(line => {
-    const cols = []; let cur = ''; let inQ = false;
-    for (const c of line) {
-      if (c === '"') inQ = !inQ;
-      else if (c === ',' && !inQ) { cols.push(cur); cur = ''; }
-      else cur += c;
-    }
-    cols.push(cur);
-    return cols.map(c => c.replace(/^"|"$/g,'').trim());
-  });
-}
-
-// ── TOAST ──────────────────────────────────────────
-function toast(msg, err=false) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'show' + (err ? ' err' : '');
-  clearTimeout(t._t);
-  t._t = setTimeout(() => t.className = '', 3200);
-}
-
-// ── RESET ───────────────────────────────────────────
-function resetAlles() {
-  if (!confirm('Alle lokalen Daten löschen?')) return;
-  localStorage.removeItem(KEY);
-  location.reload();
-}
-
-// ── HI TIER INTEGRATION ──────────────────────────────
-async function getHITierDaten(ohrmarke) {
-  if (!S.scriptUrl) return null;
-  try {
-    const url = S.scriptUrl + '?action=getTier&ohrmarke=' + encodeURIComponent(ohrmarke);
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data && !data.error) return data;
-    return null;
-  } catch(e) {
-    console.log('Fehler beim Abrufen von HI Tier:', e);
-    return null;
-  }
-}
-
-async function testHITierConnection() {
-  if (!S.scriptUrl) {
-    toast('Apps Script URL nicht konfiguriert', true);
-    return;
-  }
-  
-  const st = document.getElementById('scriptStatus');
-  st.innerHTML = connLine('spin', 'Teste…');
-  
-  try {
-    const res = await fetch(S.scriptUrl + '?action=testConnection');
-    const data = await res.json();
-    
-    if (data.connected) {
-      st.innerHTML = connLine('ok', 'HI Tier verbunden ✓');
-      toast('HI Tier Verbindung OK ✓');
-    } else {
-      st.innerHTML = connLine('err', 'HI Tier nicht erreichbar');
-      toast('HI Tier Fehler: ' + data.message, true);
-    }
-  } catch(e) {
-    st.innerHTML = connLine('err', 'Verbindungsfehler');
-    toast('Fehler: ' + e.message, true);
-  }
-}
-
-// ── BESTAND TAB ──────────────────────────────────────
-let bestandSortCol = 'nr';
-let bestandSortAsc = true;
-let bestandAllData = [];
-
-async function renderBestand() {
-  const el = document.getElementById('bestandTabelle');
-  el.innerHTML = '<div class="bestand-empty">Lade Bestandsdaten…</div>';
-
-  if (!S.sheetId) { el.innerHTML = '<div class="bestand-empty">Bitte Sheet ID konfigurieren</div>'; return; }
-
-  try {
-    // Lade Bestand + Gewichte + HI Tier Daten vom Sheet
-    const bestandUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Bestand&t=${Date.now()}`;
-    const bestandRes = await fetch(bestandUrl);
-    const bestandRows = bestandRes.ok ? parseCSV(await bestandRes.text()).slice(1) : [];
-
-    // Lade letzte Gewichte
-    const gewichteUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
-    const gewichteRes = await fetch(gewichteUrl);
-    const gewichteRows = gewichteRes.ok ? parseCSV(await gewichteRes.text()).slice(1) : [];
-
-    // Gruppiere Gewichte pro Tier (letztes zuerst)
-    const latestWeights = {};
-    gewichteRows.forEach(r => {
-      const nr = r[1];
-      if (nr && !latestWeights[nr]) latestWeights[nr] = r[2];
-    });
-
-    // Baue Bestandsdaten
-    bestandAllData = bestandRows
-      .filter(r => r[0]?.trim())
-      .map(r => ({
-        nr: r[0].trim().padStart(5, '0'),
-        rasse: r[1]?.trim() || '–',
-        geschlecht: r[2]?.trim() || '–',
-        geburtsdatum: r[3]?.trim() || '',
-        lom: r[4]?.trim() || '',
-        letzterGewicht: latestWeights[r[0].trim()] || '–',
-        incomplete: !r[3]?.trim() || !r[4]?.trim()
-      }));
-
-    renderBestandTable();
-  } catch(e) {
-    el.innerHTML = `<div class="bestand-empty">Fehler beim Laden: ${e.message}</div>`;
-  }
-}
-
-function renderBestandTable() {
-  const el = document.getElementById('bestandTabelle');
-
-  // Filter anwenden
-  const oFilter = document.getElementById('filterOhrmarke').value.toLowerCase();
-  const rFilter = document.getElementById('filterRasse').value.toLowerCase();
-  
-  let filtered = bestandAllData.filter(t =>
-    (!oFilter || t.nr.includes(oFilter)) &&
-    (!rFilter || t.rasse.toLowerCase().includes(rFilter))
-  );
-
-  // Sortieren
-  filtered.sort((a, b) => {
-    let aVal = a[bestandSortCol] || '';
-    let bVal = b[bestandSortCol] || '';
-    
-    // Zahlen vergleichen falls möglich
-    const aNum = parseFloat(aVal);
-    const bNum = parseFloat(bVal);
-    if (!isNaN(aNum) && !isNaN(bNum)) {
-      return bestandSortAsc ? aNum - bNum : bNum - aNum;
-    }
-    
-    // Text vergleichen
-    if (typeof aVal === 'string') {
-      return bestandSortAsc 
-        ? aVal.localeCompare(bVal) 
-        : bVal.localeCompare(aVal);
-    }
-    return 0;
-  });
-
-  if (!filtered.length) {
-    el.innerHTML = '<div class="bestand-empty">Keine Tiere gefunden</div>';
-    return;
-  }
-
-  // HTML
-  let html = `
-    <table class="bestand-table">
-      <thead>
-        <tr>
-          <th onclick="sortBestand('nr')">Ohrmarke ${bestandSortCol === 'nr' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-          <th onclick="sortBestand('rasse')">Rasse ${bestandSortCol === 'rasse' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-          <th onclick="sortBestand('letzterGewicht')">Letztes Gewicht ${bestandSortCol === 'letzterGewicht' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-          <th onclick="sortBestand('geburtsdatum')">Geb.datum ${bestandSortCol === 'geburtsdatum' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-          <th onclick="sortBestand('lom')">LOM ${bestandSortCol === 'lom' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
-
-  filtered.forEach(t => {
-    const incompleteClass = t.incomplete ? 'incomplete' : '';
-    html += `
-      <tr class="${incompleteClass}">
-        <td class="bestand-nr">${t.nr}</td>
-        <td>${t.rasse} ${t.geschlecht === 'm' ? '♂' : '♀'}</td>
-        <td>${t.letzterGewicht} kg</td>
-        <td>${formatDatumKurz(t.geburtsdatum)}</td>
-        <td>${t.lom || '–'}</td>
-      </tr>
-    `;
-  });
-
-  html += '</tbody></table>';
-  el.innerHTML = html;
-}
-
-function sortBestand(col) {
-  if (bestandSortCol === col) {
-    bestandSortAsc = !bestandSortAsc;
-  } else {
-    bestandSortCol = col;
-    bestandSortAsc = true;
-  }
-  renderBestandTable();
-}
-
-function filterBestand() {
-  renderBestandTable();
-}
-
-function toggleBestandSort() {
-  bestandSortAsc = !bestandSortAsc;
-  renderBestandTable();
-}
-
-async function syncBestandFromHIT() {
-  const btn = event.target;
-  btn.disabled = true;
-  btn.textContent = '⏳ Sync läuft…';
-
-  if (!S.scriptUrl) {
-    toast('Apps Script URL nicht konfiguriert', true);
-    btn.disabled = false; btn.textContent = '🔄 HIT Daten sync';
-    return;
-  }
-
-  const incomplete = bestandAllData.filter(t => !t.geburtsdatum || !t.lom);
-  if (!incomplete.length) {
-    toast('Alle Tiere haben HIT Daten ✓');
-    btn.disabled = false; btn.textContent = '🔄 HIT Daten sync';
-    return;
-  }
-
-  const banner = document.getElementById('pendingBanner');
-  banner.style.display = 'block';
-  document.getElementById('pendingText').textContent = 'Lade HIT Bestandsregister…';
-
-  try {
-    // Einmal alle HIT-Daten laden (statt ein Request pro Tier)
-    const res = await fetch(S.scriptUrl + '?action=getBestand');
-    const hitTiere = await res.json();
-
-    if (hitTiere.error) {
-      toast('HIT Fehler: ' + hitTiere.error, true);
-      banner.style.display = 'none';
-      btn.disabled = false; btn.textContent = '🔄 HIT Daten sync';
-      return;
-    }
-
-    // Lokal matchen: letzte 5 Stellen der Ohrmarke
-    const updates = [];
-    for (const tier of incomplete) {
-      const hit = hitTiere.find(h => h.lom5 === String(tier.nr).padStart(5, '0'));
-      if (hit && hit.geburtsdatum) {
-        updates.push({ nr: tier.nr, geburtsdatum: hit.geburtsdatum, lom: hit.lom });
-      }
-    }
-
-    if (!updates.length) {
-      toast('Keine passenden Tiere in HIT gefunden', true);
-      banner.style.display = 'none';
-      btn.disabled = false; btn.textContent = '🔄 HIT Daten sync';
-      return;
-    }
-
-    document.getElementById('pendingText').textContent = `Schreibe ${updates.length} Tiere ins Sheet…`;
-
-    await Promise.all(updates.flatMap(u => [
-      sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: u.nr, col: '4', val: u.geburtsdatum }),
-      sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: u.nr, col: '5', val: u.lom })
-    ]));
-
-    banner.style.display = 'none';
-    await renderBestand();
-    toast(`${updates.length} Tiere mit HIT Daten aktualisiert ✓`);
-
-  } catch(e) {
-    toast('Fehler: ' + e.message, true);
-    banner.style.display = 'none';
-  }
-
-  btn.disabled = false;
-  btn.textContent = '🔄 HIT Daten sync';
-}
-
-// ── INIT ────────────────────────────────────────────
-fuelleEreignisse();
-fuelleRassen();
-if (S.sheetId) {
-  setTimeout(() => ladeGewichteCache(), 1500);
-  checkPending();
-}
-</script>
+
+    <script>
+        // Initialize app
+        let animals = [];
+        let weights = [];
+        let breeds = ['Angeln Rind', 'Deutsch-Holländer', 'Fleckvieh', 'Limousin', 'Charolais'];
+        const STORAGE_KEY = 'tiergewichte_data';
+        const BREEDS_KEY = 'tiergewichte_breeds';
+        const SETTINGS_KEY = 'tiergewichte_settings';
+        let sheetUrl = '';
+        let appsScriptUrl = '';
+
+        // Load data from localStorage
+        function loadData() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored) {
+                const data = JSON.parse(stored);
+                animals = data.animals || [];
+                weights = data.weights || [];
+            }
+
+            // Load breeds
+            const storedBreeds = localStorage.getItem(BREEDS_KEY);
+            if (storedBreeds) {
+                breeds = JSON.parse(storedBreeds);
+            }
+
+            // Load settings
+            const settings = localStorage.getItem(SETTINGS_KEY);
+            if (settings) {
+                const parsedSettings = JSON.parse(settings);
+                sheetUrl = parsedSettings.sheetUrl || '';
+                appsScriptUrl = parsedSettings.appsScriptUrl || '';
+            }
+        }
+
+        // Save data to localStorage
+        function saveData() {
+            const data = {
+                animals: animals,
+                weights: weights
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            updateSyncStatus();
+        }
+
+        // Save settings
+        function saveSettings() {
+            const settings = {
+                sheetUrl: sheetUrl,
+                appsScriptUrl: appsScriptUrl
+            };
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        }
+
+        // Update sync status
+        function updateSyncStatus() {
+            const syncStatus = document.getElementById('syncStatus');
+            const unsyncedCount = animals.filter(a => !a.synced).length;
+            if (unsyncedCount > 0) {
+                syncStatus.textContent = `${unsyncedCount} unsynced`;
+                syncStatus.classList.remove('synced');
+            } else {
+                syncStatus.textContent = 'Synced';
+                syncStatus.classList.add('synced');
+            }
+        }
+
+        // Initialize breeds dropdown
+        function initBreeds() {
+            const breedSelect = document.getElementById('breed');
+            breedSelect.innerHTML = '<option value="">-- Wählen --</option>';
+            breeds.forEach(breed => {
+                const option = document.createElement('option');
+                option.value = breed;
+                option.textContent = breed;
+                breedSelect.appendChild(option);
+            });
+            updateBreedList();
+        }
+
+        // Add a breed
+        function addBreed() {
+            const input = document.getElementById('breedInput');
+            const newBreed = input.value.trim();
+            if (newBreed && !breeds.includes(newBreed)) {
+                breeds.push(newBreed);
+                localStorage.setItem(BREEDS_KEY, JSON.stringify(breeds));
+                initBreeds();
+                input.value = '';
+                alert('Rasse hinzugefügt!');
+            } else if (breeds.includes(newBreed)) {
+                alert('Diese Rasse existiert bereits!');
+            }
+        }
+
+        // Update breed list display
+        function updateBreedList() {
+            const breedListDiv = document.getElementById('breedList');
+            breedListDiv.innerHTML = '<strong>Verfügbare Rassen:</strong><br>';
+            breeds.forEach((breed, index) => {
+                const breedItem = document.createElement('div');
+                breedItem.style.marginBottom = '5px';
+                breedItem.innerHTML = `${breed} <button class="danger" onclick="deleteBreed(${index})" style="padding: 2px 8px; font-size: 12px;">Löschen</button>`;
+                breedListDiv.appendChild(breedItem);
+            });
+        }
+
+        // Delete a breed
+        function deleteBreed(index) {
+            breeds.splice(index, 1);
+            localStorage.setItem(BREEDS_KEY, JSON.stringify(breeds));
+            initBreeds();
+        }
+
+        // Map HI-TIER Geschlecht value to "m" or "f"
+        function mapGeschlecht(geschlecht) {
+            if (!geschlecht) return '';
+            const g = geschlecht.trim().toLowerCase();
+            if (g === 'm' || g === 'männlich' || g.startsWith('männ') || g === 'male' || g === 'kastrat' || g.startsWith('kastri')) return 'm';
+            if (g === 'w' || g === 'f' || g === 'weiblich' || g.startsWith('weibl') || g === 'female') return 'f';
+            return '';
+        }
+
+        // HI-TIER lookup by Ohrmarke — fills Rasse and Geschlecht automatically
+        async function hitLookupByEarTag() {
+            if (!appsScriptUrl) return;
+            const earTag = document.getElementById('earTag').value.trim();
+            if (!earTag) return;
+
+            const statusEl = document.getElementById('hitStatus');
+            statusEl.textContent = 'Lade von HIT...';
+            statusEl.className = 'hit-status loading';
+
+            try {
+                const url = appsScriptUrl + '?action=getTier&ohrmarke=' + encodeURIComponent(earTag);
+                const res = await fetch(url);
+                const tier = await res.json();
+
+                if (tier.error || !tier.lom) {
+                    statusEl.textContent = 'Nicht in HIT gefunden';
+                    statusEl.className = 'hit-status notfound';
+                    return;
+                }
+
+                // Fill Geschlecht
+                const mappedGender = mapGeschlecht(tier.geschlecht);
+                if (mappedGender) {
+                    document.getElementById('gender').value = mappedGender;
+                }
+
+                // Fill Rasse: try exact match first, then partial, then add to list
+                if (tier.rasse) {
+                    const breedSelect = document.getElementById('breed');
+                    const rasseHIT = tier.rasse.trim();
+                    let matched = breeds.find(b => b.toLowerCase() === rasseHIT.toLowerCase());
+                    if (!matched) {
+                        matched = breeds.find(b => b.toLowerCase().includes(rasseHIT.toLowerCase())
+                                                || rasseHIT.toLowerCase().includes(b.toLowerCase()));
+                    }
+                    if (matched) {
+                        breedSelect.value = matched;
+                    } else {
+                        // Add new breed from HIT and select it
+                        breeds.push(rasseHIT);
+                        localStorage.setItem(BREEDS_KEY, JSON.stringify(breeds));
+                        initBreeds();
+                        breedSelect.value = rasseHIT;
+                    }
+                }
+
+                const parts = [];
+                if (tier.rasse) parts.push(tier.rasse);
+                if (tier.geschlecht) parts.push(tier.geschlecht);
+                if (tier.geburtsdatum) parts.push('geb. ' + tier.geburtsdatum);
+                statusEl.textContent = 'HIT: ' + (parts.join(' · ') || tier.lom);
+                statusEl.className = 'hit-status found';
+
+            } catch (err) {
+                statusEl.textContent = 'HIT-Fehler: ' + err.message;
+                statusEl.className = 'hit-status notfound';
+            }
+        }
+
+        // Add an animal
+        function addAnimal() {
+            const earTag = document.getElementById('earTag').value.trim();
+            const breed = document.getElementById('breed').value;
+            const gender = document.getElementById('gender').value;
+            const entryWeight = parseFloat(document.getElementById('entryWeight').value);
+
+            if (!earTag || !breed || !gender || isNaN(entryWeight)) {
+                alert('Bitte füllen Sie alle Felder aus!');
+                return;
+            }
+
+            // Check if animal with this ear tag already exists
+            if (animals.some(a => a.earTag === earTag)) {
+                alert('Tier mit dieser Ohrmarke existiert bereits!');
+                return;
+            }
+
+            const animal = {
+                id: Date.now(),
+                earTag: earTag,
+                breed: breed,
+                gender: gender,
+                entryWeight: entryWeight,
+                entryDate: new Date().toISOString(),
+                synced: false
+            };
+
+            animals.push(animal);
+            saveData();
+            alert('Tier hinzugefügt!');
+            document.getElementById('earTag').value = '';
+            document.getElementById('breed').value = '';
+            document.getElementById('gender').value = '';
+            document.getElementById('entryWeight').value = '';
+            document.getElementById('hitStatus').textContent = '';
+            document.getElementById('hitStatus').className = 'hit-status';
+            updateAnimalSelect();
+        }
+
+        // View entered animals
+        function viewEnteredAnimals() {
+            const table = document.createElement('table');
+            table.innerHTML = '<thead><tr><th>Ohrmarke</th><th>Rasse</th><th>Geschlecht</th><th>Eingangsgewicht</th><th>Eingangsdatum</th></tr></thead><tbody>';
+
+            animals.forEach(animal => {
+                const row = table.insertRow();
+                row.innerHTML = `
+                    <td>${animal.earTag}</td>
+                    <td>${animal.breed}</td>
+                    <td>${animal.gender === 'm' ? 'Männlich' : 'Weiblich'}</td>
+                    <td>${animal.entryWeight.toFixed(1)} kg</td>
+                    <td>${new Date(animal.entryDate).toLocaleDateString('de-DE')}</td>
+                `;
+            });
+
+            table.innerHTML += '</tbody>';
+            alert('Erfasste Tiere:\n' + table.outerHTML);
+        }
+
+        // Update animal select dropdown
+        function updateAnimalSelect() {
+            const animalSelect = document.getElementById('animalSelect');
+            animalSelect.innerHTML = '<option value="">-- Wählen --</option>';
+            animals.forEach(animal => {
+                const option = document.createElement('option');
+                option.value = animal.id;
+                option.textContent = `${animal.earTag} (${animal.breed})`;
+                animalSelect.appendChild(option);
+            });
+        }
+
+        // Record weight
+        function recordWeight() {
+            const animalId = document.getElementById('animalSelect').value;
+            const weighDate = document.getElementById('weighDate').value;
+            const weighEvent = document.getElementById('weighEvent').value;
+            const weight = parseFloat(document.getElementById('weight').value);
+
+            if (!animalId || !weighDate || !weighEvent || isNaN(weight)) {
+                alert('Bitte füllen Sie alle Felder aus!');
+                return;
+            }
+
+            const weightRecord = {
+                id: Date.now(),
+                animalId: animalId,
+                date: weighDate,
+                event: weighEvent,
+                weight: weight,
+                synced: false
+            };
+
+            weights.push(weightRecord);
+            saveData();
+            alert('Gewicht erfasst!');
+            document.getElementById('animalSelect').value = '';
+            document.getElementById('weighDate').value = '';
+            document.getElementById('weighEvent').value = '';
+            document.getElementById('weight').value = '';
+        }
+
+        // Record group weight
+        function recordGroupWeight() {
+            const groupAnimalsInput = document.getElementById('groupAnimals').value.trim();
+            const groupWeight = parseFloat(document.getElementById('groupWeight').value);
+            const groupDate = document.getElementById('groupDate').value;
+
+            if (!groupAnimalsInput || isNaN(groupWeight) || !groupDate) {
+                alert('Bitte füllen Sie alle Felder aus!');
+                return;
+            }
+
+            const earTags = groupAnimalsInput.split(',').map(tag => tag.trim());
+            const matchingAnimals = animals.filter(a => earTags.includes(a.earTag));
+
+            if (matchingAnimals.length === 0) {
+                alert('Keine Tiere mit den angegebenen Ohrmarken gefunden!');
+                return;
+            }
+
+            const weightPerAnimal = groupWeight / matchingAnimals.length;
+
+            matchingAnimals.forEach(animal => {
+                const weightRecord = {
+                    id: Date.now() + Math.random(),
+                    animalId: animal.id,
+                    date: groupDate,
+                    event: 'Gruppengewicht',
+                    weight: weightPerAnimal,
+                    synced: false
+                };
+                weights.push(weightRecord);
+            });
+
+            saveData();
+            alert(`Gruppengewicht für ${matchingAnimals.length} Tiere erfasst!`);
+            document.getElementById('groupAnimals').value = '';
+            document.getElementById('groupWeight').value = '';
+            document.getElementById('groupDate').value = '';
+        }
+
+        // Load inventory from Google Sheets
+        async function loadInventory() {
+            if (!sheetUrl) {
+                alert('Bitte konfigurieren Sie zunächst die Sheet-URL in den Einstellungen!');
+                return;
+            }
+
+            try {
+                // For simplicity, we'll use the CSV export of Google Sheets
+                const csvUrl = sheetUrl.replace('/edit?usp=sharing', '/export?format=csv');
+                const response = await fetch(csvUrl);
+                const csv = await response.text();
+
+                // Parse CSV
+                const lines = csv.split('\n');
+                const headers = lines[0].split(',');
+                const inventoryTable = document.getElementById('inventoryTable');
+                inventoryTable.innerHTML = '<table><thead><tr>';
+
+                headers.forEach(header => {
+                    inventoryTable.querySelector('tr').innerHTML += `<th>${header}</th>`;
+                });
+
+                inventoryTable.querySelector('table').innerHTML += '</thead><tbody>';
+                for (let i = 1; i < lines.length; i++) {
+                    if (lines[i].trim()) {
+                        const values = lines[i].split(',');
+                        inventoryTable.querySelector('tbody').innerHTML += '<tr>';
+                        values.forEach(value => {
+                            inventoryTable.querySelector('tbody tr:last-child').innerHTML += `<td>${value}</td>`;
+                        });
+                        inventoryTable.querySelector('tbody').innerHTML += '</tr>';
+                    }
+                }
+
+                inventoryTable.querySelector('table').innerHTML += '</tbody></table>';
+            } catch (error) {
+                alert('Fehler beim Laden des Bestands: ' + error.message);
+            }
+        }
+
+        // Settings modal
+        const settingsBtn = document.getElementById('settingsBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const closeSettings = document.getElementById('closeSettings');
+
+        settingsBtn.addEventListener('click', () => {
+            document.getElementById('sheetUrl').value = sheetUrl;
+            document.getElementById('appsScriptUrl').value = appsScriptUrl;
+            settingsModal.style.display = 'block';
+        });
+
+        closeSettings.addEventListener('click', () => {
+            settingsModal.style.display = 'none';
+        });
+
+        window.addEventListener('click', (event) => {
+            if (event.target === settingsModal) {
+                settingsModal.style.display = 'none';
+            }
+        });
+
+        // Save sheet URL
+        document.getElementById('saveSheetBtn').addEventListener('click', () => {
+            sheetUrl = document.getElementById('sheetUrl').value;
+            saveSettings();
+            alert('Sheet-URL gespeichert!');
+        });
+
+        // Save apps script URL
+        document.getElementById('saveAppsScriptBtn').addEventListener('click', () => {
+            appsScriptUrl = document.getElementById('appsScriptUrl').value;
+            saveSettings();
+            alert('Apps Script URL gespeichert!');
+        });
+
+        // Add breed
+        document.getElementById('addBreedBtn').addEventListener('click', addBreed);
+
+        // HI-TIER auto-lookup when leaving the Ohrmarke field
+        document.getElementById('earTag').addEventListener('change', hitLookupByEarTag);
+
+        // Tab switching
+        const navButtons = document.querySelectorAll('.nav-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        navButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                navButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(tab => tab.classList.remove('active'));
+
+                button.classList.add('active');
+                const tabId = button.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+
+        // Button event listeners
+        document.getElementById('addAnimalBtn').addEventListener('click', addAnimal);
+        document.getElementById('viewEnteredAnimalsBtn').addEventListener('click', viewEnteredAnimals);
+        document.getElementById('recordWeightBtn').addEventListener('click', recordWeight);
+        document.getElementById('recordGroupWeightBtn').addEventListener('click', recordGroupWeight);
+        document.getElementById('loadInventoryBtn').addEventListener('click', loadInventory);
+
+        // Initialize date inputs to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('weighDate').value = today;
+        document.getElementById('groupDate').value = today;
+
+        // Initialize app
+        loadData();
+        initBreeds();
+        updateAnimalSelect();
+        updateSyncStatus();
+    </script>
 </body>
 </html>
