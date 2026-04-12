@@ -147,7 +147,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v10</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v11</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -291,7 +291,7 @@
 const KEY = 'tiergewichte_v1';
 let S = {
   sheetId:   '1pPv0UCSSlTnOCSRo-5Dvggf04grPyHqVnauNyytEkIg',
-  scriptUrl: 'https://script.google.com/macros/s/AKfycbxGDiZ8O1FKzANCDP5nNBD6TFMu8QkHI5nTNvRvou5fOResGW13jns4qgQwRChAdkOR/exec',
+  scriptUrl: 'https://script.google.com/macros/s/AKfycbzSS9n8suQgllTLwitJHiI9vs0nmfiVCJDDVpaol4qCTtehYgnBWcJ_PxI2obx10HsU/exec',
   bestand:   [],
   rassen:    [],
   ereignisse:[],
@@ -737,7 +737,7 @@ async function sendeEintrag(entry) {
   entry._sending = true;
   try {
     const datum = entry.ts.slice(0,10).split("-").reverse().join(".");
-    const gewichtReq = sendToScript({ tab: "Gewichte", f1: datum, f2: entry.nr, f3: entry.gewicht, f4: entry.ereignis || "Einstallung", f5: String(entry.id) });
+    const gewichtReq = sendToScript({ tab: "Gewichte", f1: datum, f2: entry.nr, f3: entry.gewicht, f4: entry.ereignis || "Einstallung" });
     let bestandReq = Promise.resolve(true);
     if (entry.typ === "einstallen") {
       bestandReq = sendToScript({ tab: "Bestand", f1: entry.nr, f2: entry.rasse, f3: entry.geschlecht });
