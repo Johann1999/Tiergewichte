@@ -163,7 +163,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v13</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v14</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -1188,8 +1188,8 @@ function openColPopup(ev, col) {
     html += '<div class="col-popup-values">';
     allVals.forEach(v => {
       const sel = activeFilter.size === 0 || activeFilter.has(v);
-      const vEsc = JSON.stringify(v).replace(/'/g,'&#39;');
-      html += `<div class="col-popup-val ${sel ? 'selected' : ''}" onclick="event.stopPropagation();toggleColFilter('${col}',${vEsc})">
+      const vSafe = String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      html += `<div class="col-popup-val ${sel ? 'selected' : ''}" onclick="event.stopPropagation();toggleColFilter('${col}','${vSafe}')">
         <span class="chk">${sel ? '✓' : ''}</span>
         <span>${v}</span>
       </div>`;
