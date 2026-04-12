@@ -147,7 +147,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v8</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v9</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -167,6 +167,7 @@
     <div class="card-label">Neues Tier erfassen</div>
     <label>Ohrmarke (letzte 5 Stellen)</label>
     <input type="text" id="inpOhrmarkeNeu" maxlength="5" inputmode="numeric" placeholder="z.B. 12345" oninput="this.value=this.value.replace(/\D/g,'')">
+    <div id="ohrmarkeStatus" style="font-size:0.8rem;min-height:1.2rem;margin-top:0.2rem"></div>
     <label>Rasse</label>
     <select id="selRasseNeu">
       <option value="">– Wählen –</option>
@@ -565,6 +566,17 @@ function selectTier(nr) {
 }
 
 // Update Tageszunahme live beim Eingeben
+document.getElementById('inpOhrmarkeNeu').addEventListener('input', () => {
+  const nr = document.getElementById('inpOhrmarkeNeu').value.trim().padStart(5, '0');
+  const el = document.getElementById('ohrmarkeStatus');
+  if (nr.length === 5 && S.bestand.find(t => t.nr === nr)) {
+    el.style.color = 'var(--red)';
+    el.textContent = '⚠ Bereits eingestallt';
+  } else {
+    el.textContent = '';
+  }
+});
+
 document.getElementById('inpGewicht').addEventListener('input', () => {
   if (selectedTier) selectTier(selectedTier.nr);
 });
@@ -585,9 +597,9 @@ async function einstallen() {
   if (isNaN(gewicht) || gewicht <= 0) { toast('Bitte Gewicht eingeben', true); return; }
 
   if (S.bestand.find(t => t.nr === nr)) {
-    if (!confirm(`Tier ${nr} ist bereits im Bestand. Trotzdem eintragen?`)) return;
+    toast(`Tier ${nr} ist bereits eingestallt!`, true);
+    return;
   }
-
   const entry = { id: Date.now(), ts: new Date().toISOString(), nr, rasse, geschlecht: '', gewicht, ereignis: 'Einstallung', typ: 'einstallen', synced: false };
   S.log.unshift(entry);
   S.bestand.push({ nr, rasse, geschlecht: '' });
@@ -605,6 +617,7 @@ async function einstallen() {
 
   // Felder leeren
   document.getElementById('inpOhrmarkeNeu').value = '';
+  document.getElementById('ohrmarkeStatus').textContent = '';
   document.getElementById('inpGewichtNeu').value = '';
   gewichteCache = null; // invalidieren
 }
