@@ -110,14 +110,30 @@
   /* Bestand Tabelle */
   .bestand-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   .bestand-table thead { background: var(--surface2); }
-  .bestand-table th { padding: 0.6rem; text-align: left; font-weight: 600; color: var(--accent); cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); }
+  .bestand-table th { padding: 0.6rem; text-align: left; font-weight: 600; color: var(--accent); cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); position: relative; white-space: nowrap; }
   .bestand-table th:hover { background: var(--border); }
+  .bestand-table th .col-filter-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-left: 4px; vertical-align: middle; }
   .bestand-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
   .bestand-table tr:hover { background: var(--surface2); }
   .bestand-table tr.incomplete { background: rgba(204,58,58,0.1); }
   .bestand-table tr.incomplete td { color: var(--red); }
   .bestand-nr { font-family: var(--mono); font-weight: 600; color: var(--accent); }
   .bestand-empty { text-align: center; padding: 2rem; color: var(--muted); }
+
+  .col-popup { position: fixed; z-index: 500; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 0.5rem; min-width: 180px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  .col-popup-title { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
+  .col-popup-btn { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text); font-size: 0.85rem; padding: 0.4rem 0.5rem; border-radius: 6px; cursor: pointer; font-family: var(--sans); }
+  .col-popup-btn:hover { background: var(--surface2); }
+  .col-popup-btn.active { color: var(--accent); }
+  .col-popup-sep { border-top: 1px solid var(--border); margin: 0.3rem 0; }
+  .col-popup-values { max-height: 200px; overflow-y: auto; }
+  .col-popup-val { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.5rem; border-radius: 6px; cursor: pointer; font-size: 0.82rem; color: var(--text); }
+  .col-popup-val:hover { background: var(--surface2); }
+  .col-popup-val.selected { color: var(--accent); font-weight: 600; }
+  .col-popup-val .chk { width: 16px; height: 16px; border: 1.5px solid var(--border); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; flex-shrink: 0; }
+  .col-popup-val.selected .chk { border-color: var(--accent); background: var(--accent-dim); }
+  .col-popup-reset { display: block; width: 100%; text-align: center; background: none; border: 1px solid var(--border); color: var(--muted); font-size: 0.75rem; padding: 0.3rem; border-radius: 6px; cursor: pointer; margin-top: 0.3rem; font-family: var(--sans); }
+  .col-popup-reset:hover { color: var(--text); border-color: var(--accent); }
 
   /* Pending Banner */
   #pendingBanner { background: #2a2000; border: 1px solid var(--gold); border-radius: var(--r); padding: 0.5rem 0.75rem; margin-bottom: 0.4rem; font-size: 0.82rem; color: var(--gold); display: none; }
@@ -243,16 +259,9 @@
   </div>
   
   <div class="card" style="padding:0.4rem">
-    <div style="display:flex;gap:0.4rem;margin-bottom:0.4rem;flex-wrap:wrap">
-      <button class="btn btn-accent" onclick="syncBestandFromHIT()" style="flex:1;min-width:150px;margin-bottom:0">🔄 HIT Daten sync</button>
-      <button class="btn btn-ghost" onclick="toggleBestandSort()" style="flex:1;min-width:150px;margin-bottom:0">⇅ Sortierung</button>
-    </div>
-    
-    <div style="display:grid;grid-template-columns:1fr 1fr 80px;gap:0.4rem;margin-bottom:0.4rem">
-      <input type="text" id="filterOhrmarke" placeholder="Filter Ohrmarke…" style="margin-bottom:0" oninput="filterBestand()">
-      <input type="text" id="filterRasse" placeholder="Filter Rasse…" style="margin-bottom:0" oninput="filterBestand()"><select id="filterGeschlecht" style="margin-bottom:0" onchange="filterBestand()"><option value="">Alle</option><option value="m">M</option><option value="w">W</option></select>
-    </div>
+    <button class="btn btn-accent" onclick="syncBestandFromHIT()" style="width:100%;margin-bottom:0">🔄 HIT Daten sync</button>
   </div>
+  <div id="colPopup" class="col-popup" style="display:none"></div>
 
   <div id="bestandTabelle" style="overflow-x:auto">
     <!-- Wird mit JavaScript gefüllt -->
@@ -1072,98 +1081,187 @@ async function renderBestand() {
   }
 }
 
-function renderBestandTable() {
-  const el = document.getElementById('bestandTabelle');
+// Spaltenfilter: { col: Set von erlaubten Werten } oder leer = kein Filter
+let bestandColFilters = {};
 
-  // Filter anwenden
-  const oFilter = document.getElementById('filterOhrmarke').value.toLowerCase();
-  const rFilter = document.getElementById('filterRasse').value.toLowerCase();
-  const gFilter = document.getElementById('filterGeschlecht').value.toLowerCase();
-  
-  let filtered = bestandAllData.filter(t =>
-    (!oFilter || t.nr.includes(oFilter)) &&
-    (!rFilter || t.rasse.toLowerCase().includes(rFilter)) &&
-    (!gFilter || t.geschlecht.toLowerCase() === gFilter)
-  );
+function getFilteredBestand() {
+  let filtered = bestandAllData.filter(t => {
+    for (const col in bestandColFilters) {
+      const allowed = bestandColFilters[col];
+      if (allowed && allowed.size > 0) {
+        const val = getDisplayVal(t, col);
+        if (!allowed.has(val)) return false;
+      }
+    }
+    return true;
+  });
 
-  // Sortieren
   filtered.sort((a, b) => {
     let aVal = a[bestandSortCol] || '';
     let bVal = b[bestandSortCol] || '';
-    
-    // Zahlen vergleichen falls möglich
     const aNum = parseFloat(aVal);
     const bNum = parseFloat(bVal);
     if (!isNaN(aNum) && !isNaN(bNum)) {
       return bestandSortAsc ? aNum - bNum : bNum - aNum;
     }
-    
-    // Text vergleichen
     if (typeof aVal === 'string') {
-      return bestandSortAsc 
-        ? aVal.localeCompare(bVal) 
-        : bVal.localeCompare(aVal);
+      return bestandSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
     }
     return 0;
   });
+  return filtered;
+}
+
+function getDisplayVal(t, col) {
+  if (col === 'geschlecht') return t.geschlecht === 'm' ? 'M' : t.geschlecht === 'w' ? 'W' : '–';
+  if (col === 'letzterGewicht') return t.letzterGewicht;
+  if (col === 'geburtsdatum') return formatDatumKurz(t.geburtsdatum);
+  if (col === 'lom') return t.lom || '–';
+  return t[col] || '';
+}
+
+const bestandCols = [
+  { key: 'nr', label: 'Ohrmarke' },
+  { key: 'rasse', label: 'Rasse' },
+  { key: 'geschlecht', label: 'Gesch.' },
+  { key: 'letzterGewicht', label: 'Gewicht' },
+  { key: 'geburtsdatum', label: 'Geb.datum' },
+  { key: 'lom', label: 'LOM' }
+];
+
+function renderBestandTable() {
+  const el = document.getElementById('bestandTabelle');
+  const filtered = getFilteredBestand();
 
   if (!filtered.length) {
     el.innerHTML = '<div class="bestand-empty">Keine Tiere gefunden</div>';
     return;
   }
 
-  // HTML
-  let html = `
-    <table class="bestand-table">
-      <thead>
-        <tr>
-          <th onclick="sortBestand('nr')">Ohrmarke ${bestandSortCol === 'nr' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-          <th onclick="sortBestand('rasse')">Rasse ${bestandSortCol === 'rasse' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-          <th onclick="sortBestand('geschlecht')">Gesch. ${bestandSortCol === 'geschlecht' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-          <th onclick="sortBestand('letzterGewicht')">Letztes Gewicht ${bestandSortCol === 'letzterGewicht' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-          <th onclick="sortBestand('geburtsdatum')">Geb.datum ${bestandSortCol === 'geburtsdatum' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-          <th onclick="sortBestand('lom')">LOM ${bestandSortCol === 'lom' ? (bestandSortAsc ? '▲' : '▼') : ''}</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
+  const ths = bestandCols.map(c => {
+    const arrow = bestandSortCol === c.key ? (bestandSortAsc ? ' ▲' : ' ▼') : '';
+    const dot = bestandColFilters[c.key] && bestandColFilters[c.key].size > 0 ? '<span class="col-filter-dot"></span>' : '';
+    return `<th onclick="openColPopup(event,'${c.key}')">${c.label}${arrow}${dot}</th>`;
+  }).join('');
+
+  let html = `<table class="bestand-table"><thead><tr>${ths}</tr></thead><tbody>`;
 
   filtered.forEach(t => {
-    const incompleteClass = t.incomplete ? 'incomplete' : '';
-    html += `
-      <tr class="${incompleteClass}">
-        <td class="bestand-nr">${t.nr}</td>
-        <td>${t.rasse}</td>
-        <td>${t.geschlecht === 'm' ? 'M' : t.geschlecht === 'w' ? 'W' : '–'}</td>
-        <td>${t.letzterGewicht} kg</td>
-        <td>${formatDatumKurz(t.geburtsdatum)}</td>
-        <td>${t.lom || '–'}</td>
-      </tr>
-    `;
+    const ic = t.incomplete ? 'incomplete' : '';
+    html += `<tr class="${ic}">
+      <td class="bestand-nr">${t.nr}</td>
+      <td>${t.rasse}</td>
+      <td>${getDisplayVal(t, 'geschlecht')}</td>
+      <td>${t.letzterGewicht} kg</td>
+      <td>${formatDatumKurz(t.geburtsdatum)}</td>
+      <td>${t.lom || '–'}</td>
+    </tr>`;
   });
 
   html += '</tbody></table>';
   el.innerHTML = html;
 }
 
-function sortBestand(col) {
-  if (bestandSortCol === col) {
-    bestandSortAsc = !bestandSortAsc;
+function openColPopup(ev, col) {
+  ev.stopPropagation();
+  const popup = document.getElementById('colPopup');
+  const colDef = bestandCols.find(c => c.key === col);
+
+  // Eindeutige Werte für diese Spalte sammeln
+  const allVals = [...new Set(bestandAllData.map(t => getDisplayVal(t, col)))].sort((a, b) => {
+    const an = parseFloat(a), bn = parseFloat(b);
+    if (!isNaN(an) && !isNaN(bn)) return an - bn;
+    return String(a).localeCompare(String(b));
+  });
+
+  const activeFilter = bestandColFilters[col] || new Set();
+
+  let html = `<div class="col-popup-title">${colDef.label}</div>`;
+
+  // Sortier-Buttons
+  html += `<button class="col-popup-btn ${bestandSortCol === col && bestandSortAsc ? 'active' : ''}" onclick="doSort('${col}',true)">▲ Aufsteigend</button>`;
+  html += `<button class="col-popup-btn ${bestandSortCol === col && !bestandSortAsc ? 'active' : ''}" onclick="doSort('${col}',false)">▼ Absteigend</button>`;
+
+  // Filter-Optionen nur wenn sinnvoll viele verschiedene Werte (nicht für z.B. Ohrmarke mit 500 Werten)
+  if (allVals.length <= 50) {
+    html += '<div class="col-popup-sep"></div>';
+    html += '<div class="col-popup-values">';
+    allVals.forEach(v => {
+      const sel = activeFilter.size === 0 || activeFilter.has(v);
+      html += `<div class="col-popup-val ${sel ? 'selected' : ''}" onclick="toggleColFilter('${col}',${JSON.stringify(v)})">
+        <span class="chk">${sel ? '✓' : ''}</span>
+        <span>${v}</span>
+      </div>`;
+    });
+    html += '</div>';
+    if (activeFilter.size > 0) {
+      html += `<button class="col-popup-reset" onclick="clearColFilter('${col}')">Filter zurücksetzen</button>`;
+    }
+  }
+
+  popup.innerHTML = html;
+
+  // Position berechnen
+  const rect = ev.target.closest('th').getBoundingClientRect();
+  let left = rect.left;
+  let top = rect.bottom + 4;
+  // Nicht über den Bildschirmrand
+  popup.style.display = 'block';
+  const pw = popup.offsetWidth;
+  if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+  if (left < 8) left = 8;
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+}
+
+function doSort(col, asc) {
+  bestandSortCol = col;
+  bestandSortAsc = asc;
+  closeColPopup();
+  renderBestandTable();
+}
+
+function toggleColFilter(col, val) {
+  if (!bestandColFilters[col]) {
+    // Erster Klick: Alle außer diesem deselektieren = nur diesen Wert anzeigen
+    const allVals = [...new Set(bestandAllData.map(t => getDisplayVal(t, col)))];
+    // Wenn alle ausgewählt waren, jetzt nur diesen auswählen
+    bestandColFilters[col] = new Set([val]);
   } else {
-    bestandSortCol = col;
-    bestandSortAsc = true;
+    const f = bestandColFilters[col];
+    if (f.has(val)) {
+      f.delete(val);
+      if (f.size === 0) delete bestandColFilters[col];
+    } else {
+      f.add(val);
+    }
+  }
+  // Popup aktualisieren
+  const th = document.querySelector(`.bestand-table th:nth-child(${bestandCols.findIndex(c => c.key === col) + 1})`);
+  if (th) {
+    const fakeEv = { stopPropagation: () => {}, target: th };
+    openColPopup(fakeEv, col);
   }
   renderBestandTable();
 }
 
-function filterBestand() {
+function clearColFilter(col) {
+  delete bestandColFilters[col];
+  closeColPopup();
   renderBestandTable();
 }
 
-function toggleBestandSort() {
-  bestandSortAsc = !bestandSortAsc;
-  renderBestandTable();
+function closeColPopup() {
+  document.getElementById('colPopup').style.display = 'none';
 }
+
+// Popup schließen bei Klick außerhalb
+document.addEventListener('click', (e) => {
+  const popup = document.getElementById('colPopup');
+  if (popup && popup.style.display !== 'none' && !popup.contains(e.target) && !e.target.closest('.bestand-table th')) {
+    closeColPopup();
+  }
+});
 
 async function syncBestandFromHIT() {
   const btn = event.target;
