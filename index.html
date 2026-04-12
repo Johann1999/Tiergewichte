@@ -163,7 +163,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v15</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v16</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -1087,14 +1087,17 @@ async function renderBestand() {
 // Spaltenfilter: { col: Set von erlaubten Werten } oder leer = kein Filter
 let bestandColFilters = {};
 
+function hasActiveFilters() {
+  return Object.keys(bestandColFilters).length > 0;
+}
+
 function getFilteredBestand() {
   let filtered = bestandAllData.filter(t => {
     for (const col in bestandColFilters) {
       const allowed = bestandColFilters[col];
-      if (allowed && allowed.size > 0) {
-        const val = getDisplayVal(t, col);
-        if (!allowed.has(val)) return false;
-      }
+      // allowed ist ein Set: nur Werte darin werden angezeigt. Leeres Set = nichts anzeigen.
+      const val = getDisplayVal(t, col);
+      if (!allowed.has(val)) return false;
     }
     return true;
   });
@@ -1143,7 +1146,7 @@ function renderBestandTable() {
 
   const ths = bestandCols.map(c => {
     const arrow = bestandSortCol === c.key ? (bestandSortAsc ? ' ▲' : ' ▼') : '';
-    const dot = bestandColFilters[c.key] && bestandColFilters[c.key].size > 0 ? '<span class="col-filter-dot"></span>' : '';
+    const dot = bestandColFilters[c.key] ? '<span class="col-filter-dot"></span>' : '';
     return `<th onclick="openColPopup(event,'${c.key}')">${c.label}${arrow}${dot}</th>`;
   }).join('');
 
@@ -1189,14 +1192,15 @@ function openColPopup(ev, col) {
   if (allVals.length <= 50) {
     html += '<div class="col-popup-sep"></div>';
     // Alle an/abwählen
-    const allSelected = activeFilter.size === 0 || activeFilter.size === allVals.length;
+    const noFilter = !bestandColFilters[col];
+    const allSelected = noFilter || activeFilter.size === allVals.length;
     html += `<div class="col-popup-val ${allSelected ? 'selected' : ''}" onclick="event.stopPropagation();toggleAllColFilter('${col}')" style="font-weight:600;border-bottom:1px solid var(--border);margin-bottom:0.2rem;padding-bottom:0.4rem">
       <span class="chk">${allSelected ? '✓' : ''}</span>
       <span>Alle</span>
     </div>`;
     html += '<div class="col-popup-values">';
     allVals.forEach(v => {
-      const sel = activeFilter.size === 0 || activeFilter.has(v);
+      const sel = noFilter || activeFilter.has(v);
       const vSafe = String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       html += `<div class="col-popup-val ${sel ? 'selected' : ''}" onclick="event.stopPropagation();toggleColFilter('${col}','${vSafe}')">
         <span class="chk">${sel ? '✓' : ''}</span>
@@ -1231,7 +1235,7 @@ function doSort(col, asc) {
 function toggleColFilter(col, val) {
   const allVals = [...new Set(bestandAllData.map(t => getDisplayVal(t, col)))];
   if (!bestandColFilters[col]) {
-    // Kein Filter aktiv = alle sichtbar. Klick auf einen Wert → diesen abwählen (= alle außer diesem)
+    // Kein Filter aktiv = alle sichtbar. Klick auf einen Wert → diesen abwählen
     const s = new Set(allVals);
     s.delete(val);
     bestandColFilters[col] = s;
@@ -1239,7 +1243,7 @@ function toggleColFilter(col, val) {
     const f = bestandColFilters[col];
     if (f.has(val)) {
       f.delete(val);
-      if (f.size === 0) delete bestandColFilters[col];
+      // Leeres Set bleibt → zeigt leere Liste
     } else {
       f.add(val);
       // Wenn alle wieder ausgewählt → Filter entfernen
@@ -1288,8 +1292,7 @@ function clearAllFilters() {
 
 function updateClearFilterBtn() {
   const btn = document.getElementById('btnClearAllFilters');
-  const hasFilters = Object.keys(bestandColFilters).some(k => bestandColFilters[k] && bestandColFilters[k].size > 0);
-  btn.style.display = hasFilters ? '' : 'none';
+  btn.style.display = hasActiveFilters() ? '' : 'none';
 }
 
 function closeColPopup() {
