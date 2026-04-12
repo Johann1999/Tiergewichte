@@ -110,7 +110,7 @@
   /* Bestand Tabelle */
   .bestand-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   .bestand-table thead { background: var(--surface2); }
-  .bestand-table th { padding: 0.6rem; text-align: left; font-weight: 600; color: var(--accent); cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); position: relative; white-space: nowrap; }
+  .bestand-table th { padding: 0.7rem 0.6rem; text-align: left; font-weight: 600; font-size: 1rem; color: var(--accent); cursor: pointer; user-select: none; border-bottom: 1px solid var(--border); position: relative; white-space: nowrap; }
   .bestand-table th:hover { background: var(--border); }
   .bestand-table th .col-filter-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-left: 4px; vertical-align: middle; }
   .bestand-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); }
@@ -120,19 +120,19 @@
   .bestand-nr { font-family: var(--mono); font-weight: 600; color: var(--accent); }
   .bestand-empty { text-align: center; padding: 2rem; color: var(--muted); }
 
-  .col-popup { position: fixed; z-index: 500; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 0.5rem; min-width: 180px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-  .col-popup-title { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.4rem; }
-  .col-popup-btn { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text); font-size: 0.85rem; padding: 0.4rem 0.5rem; border-radius: 6px; cursor: pointer; font-family: var(--sans); }
+  .col-popup { position: fixed; z-index: 500; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 0.6rem; min-width: 220px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  .col-popup-title { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+  .col-popup-btn { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text); font-size: 1.05rem; padding: 0.55rem 0.6rem; border-radius: 6px; cursor: pointer; font-family: var(--sans); }
   .col-popup-btn:hover { background: var(--surface2); }
   .col-popup-btn.active { color: var(--accent); }
-  .col-popup-sep { border-top: 1px solid var(--border); margin: 0.3rem 0; }
-  .col-popup-values { max-height: 200px; overflow-y: auto; }
-  .col-popup-val { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.5rem; border-radius: 6px; cursor: pointer; font-size: 0.82rem; color: var(--text); }
+  .col-popup-sep { border-top: 1px solid var(--border); margin: 0.4rem 0; }
+  .col-popup-values { max-height: 260px; overflow-y: auto; }
+  .col-popup-val { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.6rem; border-radius: 6px; cursor: pointer; font-size: 1rem; color: var(--text); }
   .col-popup-val:hover { background: var(--surface2); }
   .col-popup-val.selected { color: var(--accent); font-weight: 600; }
-  .col-popup-val .chk { width: 16px; height: 16px; border: 1.5px solid var(--border); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; flex-shrink: 0; }
+  .col-popup-val .chk { width: 22px; height: 22px; border: 1.5px solid var(--border); border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0; }
   .col-popup-val.selected .chk { border-color: var(--accent); background: var(--accent-dim); }
-  .col-popup-reset { display: block; width: 100%; text-align: center; background: none; border: 1px solid var(--border); color: var(--muted); font-size: 0.75rem; padding: 0.3rem; border-radius: 6px; cursor: pointer; margin-top: 0.3rem; font-family: var(--sans); }
+  .col-popup-reset { display: block; width: 100%; text-align: center; background: none; border: 1px solid var(--border); color: var(--muted); font-size: 0.9rem; padding: 0.45rem; border-radius: 6px; cursor: pointer; margin-top: 0.4rem; font-family: var(--sans); }
   .col-popup-reset:hover { color: var(--text); border-color: var(--accent); }
 
   /* Pending Banner */
@@ -163,7 +163,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v17</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v18</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
