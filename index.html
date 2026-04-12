@@ -163,7 +163,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v18</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v19</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -181,8 +181,8 @@
   <div id="pendingBanner"><span>⏳</span> <span id="pendingText"></span></div>
   <div class="card">
     <div class="card-label">Neues Tier erfassen</div>
-    <label>Ohrmarke (letzte 5 Stellen)</label>
-    <input type="text" id="inpOhrmarkeNeu" maxlength="5" inputmode="numeric" placeholder="z.B. 12345" oninput="this.value=this.value.replace(/\D/g,'')">
+    <label>LOM (vollständige Ohrmarke)</label>
+    <input type="text" id="inpOhrmarkeNeu" maxlength="15" inputmode="numeric" placeholder="z.B. DE0346012345" oninput="onLomInput()">
     <div id="ohrmarkeStatus" style="font-size:0.8rem;min-height:1.2rem;margin-top:0.2rem"></div>
     <label>Rasse</label>
     <select id="selRasseNeu">
@@ -447,7 +447,10 @@ async function ladeEreignisse() {
     const res = await fetch(url);
     if (!res.ok) return;
     const rows = parseCSV(await res.text());
-    S.ereignisse = rows.slice(1).map(r => r[0]?.trim()).filter(Boolean);
+    S.ereignisse = rows.slice(1).filter(r => r[0]?.trim()).map(r => ({
+      name: r[0].trim(),
+      hitAktion: (r[1] || '').trim()
+    }));
     saveS();
     fuelleEreignisse();
   } catch(e) {}
@@ -472,13 +475,27 @@ function fuelleEreignisse() {
     const sel = document.getElementById(id);
     const cur = sel.value;
     sel.innerHTML = '<option value="">– Wählen –</option>';
-    S.ereignisse.forEach(e => {
+    getEreignisNamen().forEach(name => {
       const o = document.createElement('option');
-      o.value = o.textContent = e;
+      o.value = o.textContent = name;
       sel.appendChild(o);
     });
     if (cur) sel.value = cur;
   });
+}
+
+// Hilfsfunktionen für Ereignisse (kompatibel mit altem String-Array und neuem Objekt-Array)
+function getEreignisNamen() {
+  if (!S.ereignisse || !S.ereignisse.length) return [];
+  if (typeof S.ereignisse[0] === 'string') return S.ereignisse;
+  return S.ereignisse.map(e => e.name);
+}
+
+function getHitAktion(ereignisName) {
+  if (!S.ereignisse || !S.ereignisse.length) return '';
+  if (typeof S.ereignisse[0] === 'string') return '';
+  const evt = S.ereignisse.find(e => e.name === ereignisName);
+  return evt ? evt.hitAktion : '';
 }
 
 function fuelleRassen() {
@@ -528,6 +545,7 @@ function getPreviousWeight(nr) {
 }
 
 function getNextEreignis(nr) {
+  const namen = getEreignisNamen();
   let lastEvent = null;
   let lastDate = null;
   if (gewichteCache) {
@@ -540,10 +558,10 @@ function getNextEreignis(nr) {
     const logDate = new Date(logEntries[0].ts);
     if (!lastDate || logDate > lastDate) { lastEvent = logEntries[0].ereignis; }
   }
-  if (!lastEvent) return S.ereignisse && S.ereignisse[0] ? S.ereignisse[0] : '';
-  const idx = S.ereignisse.indexOf(lastEvent);
+  if (!lastEvent) return namen[0] || '';
+  const idx = namen.indexOf(lastEvent);
   if (idx < 0) return '';
-  if (idx + 1 < S.ereignisse.length) return S.ereignisse[idx + 1];
+  if (idx + 1 < namen.length) return namen[idx + 1];
   return lastEvent;
 }
 
@@ -617,16 +635,27 @@ function selectTier(nr) {
 }
 
 // Update Tageszunahme live beim Eingeben
-document.getElementById('inpOhrmarkeNeu').addEventListener('input', () => {
-  const nr = document.getElementById('inpOhrmarkeNeu').value.trim().padStart(5, '0');
+function parseLom(input) {
+  // Entfernt alles außer Ziffern, extrahiert letzte 5 als nr
+  const digits = input.replace(/[^0-9]/g, '');
+  if (digits.length < 5) return { lom: '', nr: '', valid: false };
+  const nr = digits.slice(-5);
+  return { lom: digits, nr: nr, valid: digits.length >= 5 };
+}
+
+function onLomInput() {
+  const raw = document.getElementById('inpOhrmarkeNeu').value.trim();
   const el = document.getElementById('ohrmarkeStatus');
-  if (nr.length === 5 && S.bestand.find(t => t.nr === nr)) {
+  const { nr, lom, valid } = parseLom(raw);
+  if (!valid) { el.textContent = ''; return; }
+  if (S.bestand.find(t => t.nr === nr)) {
     el.style.color = 'var(--red)';
-    el.textContent = '⚠ Bereits eingestallt';
+    el.textContent = '⚠ Bereits eingestallt (' + nr + ')';
   } else {
-    el.textContent = '';
+    el.style.color = 'var(--muted)';
+    el.textContent = 'Nr: ' + nr + (lom.length >= 10 ? ' · LOM: ' + lom : '');
   }
-});
+}
 
 document.getElementById('inpGewicht').addEventListener('input', () => {
   if (selectedTier) selectTier(selectedTier.nr);
@@ -639,12 +668,12 @@ document.addEventListener('click', e => {
 
 // ── EINSTALLEN ──────────────────────────────────────
 async function einstallen() {
-  const rawNr     = document.getElementById('inpOhrmarkeNeu').value.trim();
-  const nr        = rawNr.padStart(5, '0');
+  const rawInput  = document.getElementById('inpOhrmarkeNeu').value.trim();
+  const { lom, nr, valid } = parseLom(rawInput);
   const rasse     = document.getElementById('selRasseNeu').value;
   const gewicht   = parseFloat(document.getElementById('inpGewichtNeu').value);
 
-  if (!rawNr || rawNr.length < 5) { toast('Ohrmarke muss 5 Stellen haben', true); return; }
+  if (!valid || nr.length < 5) { toast('Bitte gültige Ohrmarke/LOM eingeben', true); return; }
   if (!rasse)      { toast('Bitte Rasse wählen', true); return; }
   if (isNaN(gewicht) || gewicht <= 0) { toast('Bitte Gewicht eingeben', true); return; }
 
@@ -652,9 +681,14 @@ async function einstallen() {
     toast(`Tier ${nr} ist bereits eingestallt!`, true);
     return;
   }
-  const entry = { id: Date.now(), ts: new Date().toISOString(), nr, rasse, geschlecht: '', gewicht, ereignis: 'Einstallung', typ: 'einstallen', synced: false };
+
+  // Ereignis "Einstallung" — prüfe ob HIT-Meldung nötig
+  const erstesEreignis = getEreignisNamen()[0] || 'Einstallung';
+  const hitAktion = getHitAktion(erstesEreignis);
+
+  const entry = { id: Date.now(), ts: new Date().toISOString(), nr, lom, rasse, geschlecht: '', gewicht, ereignis: erstesEreignis, typ: 'einstallen', synced: false };
   S.log.unshift(entry);
-  S.bestand.push({ nr, rasse, geschlecht: '' });
+  S.bestand.push({ nr, rasse, geschlecht: '', lom });
   saveS();
   updateSyncDot();
 
@@ -668,6 +702,14 @@ async function einstallen() {
   sendeEintrag(entry).then(ok => {
     if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
   });
+
+  // HIT Zugangsmeldung
+  if (hitAktion.toLowerCase() === 'zugang' && lom.length >= 10) {
+    sendeHitZugang(lom, entry.ts.slice(0,10)).then(ok => {
+      if (ok) toast('HIT Zugang gemeldet ✓');
+      else toast('HIT Meldung fehlgeschlagen', true);
+    });
+  }
 }
 
 // ── WIEGEN ──────────────────────────────────────────
@@ -864,12 +906,25 @@ async function sendeEintrag(entry) {
     const gewichtReq = sendToScript({ tab: "Gewichte", f1: datum, f2: entry.nr, f3: entry.gewicht, f4: entry.ereignis || "Einstallung" });
     let bestandReq = Promise.resolve(true);
     if (entry.typ === "einstallen") {
-      bestandReq = sendToScript({ tab: "Bestand", f1: entry.nr, f2: entry.rasse, f3: entry.geschlecht });
+      bestandReq = sendToScript({ tab: "Bestand", f1: entry.nr, f2: entry.rasse, f3: entry.geschlecht, f4: entry.lom || '' });
     }
     const [ok] = await Promise.all([gewichtReq, bestandReq]);
     return ok;
   } catch(e) { return false; }
   finally { entry._sending = false; }
+}
+
+async function sendeHitZugang(lom, datum) {
+  if (!S.scriptUrl) return false;
+  try {
+    const url = S.scriptUrl + '?action=hitZugang&lom=' + encodeURIComponent(lom) + '&datum=' + encodeURIComponent(datum);
+    const res = await fetch(url);
+    const data = await res.json();
+    return data && !data.error;
+  } catch(e) {
+    console.log('HIT Zugangsmeldung fehlgeschlagen:', e);
+    return false;
+  }
 }
 
 async function sendToScript(params) {
