@@ -147,7 +147,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v11</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v12</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -585,7 +585,7 @@ function selectTier(nr) {
       const tage = Math.max(1, Math.round((today - lwDate) / 86400000));
       const aktuell = parseFloat(document.getElementById('inpGewicht').value);
       if (!isNaN(aktuell) && aktuell > 0) {
-        const zunahme = ((aktuell - lw.gewicht) / tage).toFixed(0);
+        const zunahme = Math.round((aktuell - lw.gewicht) / tage * 1000);
         const cls = zunahme >= 0 ? 'gain-pos' : 'gain-neg';
         document.getElementById('tiInfoGain').innerHTML = `<span class="${cls}">${zunahme >= 0 ? '+' : ''}${zunahme} g/Tag (${tage}d)</span>`;
       } else {
@@ -752,8 +752,28 @@ function updateSelectedCount() {
   const info = document.getElementById('gruppeInfo');
   if (n > 0 && !isNaN(leer) && !isNaN(voll) && voll > leer) {
     const netto = voll - leer;
-    const proTier = (netto / n).toFixed(1);
-    info.textContent = `Netto: ${netto.toFixed(1)} kg → ${proTier} kg pro Tier`;
+    const proTier = parseFloat((netto / n).toFixed(1));
+    // Ø Tageszunahme berechnen
+    let gainSum = 0, gainCount = 0;
+    S._selectedGruppe.forEach(nr => {
+      const prev = getPreviousWeight(nr);
+      if (prev) {
+        const prevDate = datumToDate(prev.datum);
+        if (prevDate) {
+          const today = new Date(); today.setHours(0,0,0,0);
+          const tage = Math.max(1, Math.round((today - prevDate) / 86400000));
+          const zunahmeG = Math.round((proTier - prev.gewicht) / tage * 1000);
+          gainSum += zunahmeG;
+          gainCount++;
+        }
+      }
+    });
+    let gainText = '';
+    if (gainCount > 0) {
+      const avgGain = Math.round(gainSum / gainCount);
+      gainText = ` · Ø ${avgGain >= 0 ? '+' : ''}${avgGain} g/Tag`;
+    }
+    info.innerHTML = `Netto: ${netto.toFixed(1)} kg → ${proTier} kg pro Tier${gainText}`;
     info.style.display = 'block';
   } else if (n > 0 && !isNaN(leer) && !isNaN(voll) && voll <= leer && voll > 0) {
     info.textContent = '⚠ Vollgewicht muss größer als Leergewicht sein';
