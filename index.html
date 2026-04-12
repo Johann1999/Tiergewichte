@@ -163,7 +163,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v14</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v15</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -259,7 +259,10 @@
   </div>
   
   <div class="card" style="padding:0.4rem">
-    <button class="btn btn-accent" onclick="syncBestandFromHIT()" style="width:100%;margin-bottom:0">🔄 HIT Daten sync</button>
+    <div style="display:flex;gap:0.4rem">
+      <button class="btn btn-accent" onclick="syncBestandFromHIT()" style="flex:1;margin-bottom:0">🔄 HIT Daten sync</button>
+      <button class="btn btn-ghost" id="btnClearAllFilters" onclick="clearAllFilters()" style="flex:1;margin-bottom:0;display:none">✕ Filter löschen</button>
+    </div>
   </div>
   <div id="colPopup" class="col-popup" style="display:none"></div>
 
@@ -1182,9 +1185,15 @@ function openColPopup(ev, col) {
   html += `<button class="col-popup-btn ${bestandSortCol === col && bestandSortAsc ? 'active' : ''}" onclick="doSort('${col}',true)">▲ Aufsteigend</button>`;
   html += `<button class="col-popup-btn ${bestandSortCol === col && !bestandSortAsc ? 'active' : ''}" onclick="doSort('${col}',false)">▼ Absteigend</button>`;
 
-  // Filter-Optionen nur wenn sinnvoll viele verschiedene Werte (nicht für z.B. Ohrmarke mit 500 Werten)
+  // Filter-Optionen nur wenn sinnvoll viele verschiedene Werte
   if (allVals.length <= 50) {
     html += '<div class="col-popup-sep"></div>';
+    // Alle an/abwählen
+    const allSelected = activeFilter.size === 0 || activeFilter.size === allVals.length;
+    html += `<div class="col-popup-val ${allSelected ? 'selected' : ''}" onclick="event.stopPropagation();toggleAllColFilter('${col}')" style="font-weight:600;border-bottom:1px solid var(--border);margin-bottom:0.2rem;padding-bottom:0.4rem">
+      <span class="chk">${allSelected ? '✓' : ''}</span>
+      <span>Alle</span>
+    </div>`;
     html += '<div class="col-popup-values">';
     allVals.forEach(v => {
       const sel = activeFilter.size === 0 || activeFilter.has(v);
@@ -1195,9 +1204,6 @@ function openColPopup(ev, col) {
       </div>`;
     });
     html += '</div>';
-    if (activeFilter.size > 0) {
-      html += `<button class="col-popup-reset" onclick="event.stopPropagation();clearColFilter('${col}')">Filter zurücksetzen</button>`;
-    }
   }
 
   popup.innerHTML = html;
@@ -1223,8 +1229,12 @@ function doSort(col, asc) {
 }
 
 function toggleColFilter(col, val) {
+  const allVals = [...new Set(bestandAllData.map(t => getDisplayVal(t, col)))];
   if (!bestandColFilters[col]) {
-    bestandColFilters[col] = new Set([val]);
+    // Kein Filter aktiv = alle sichtbar. Klick auf einen Wert → diesen abwählen (= alle außer diesem)
+    const s = new Set(allVals);
+    s.delete(val);
+    bestandColFilters[col] = s;
   } else {
     const f = bestandColFilters[col];
     if (f.has(val)) {
@@ -1232,10 +1242,28 @@ function toggleColFilter(col, val) {
       if (f.size === 0) delete bestandColFilters[col];
     } else {
       f.add(val);
+      // Wenn alle wieder ausgewählt → Filter entfernen
+      if (f.size >= allVals.length) delete bestandColFilters[col];
     }
   }
-  // Tabelle zuerst rendern, dann Popup mit neuer th-Referenz aktualisieren
+  refreshPopupAndTable(col);
+}
+
+function toggleAllColFilter(col) {
+  const allVals = [...new Set(bestandAllData.map(t => getDisplayVal(t, col)))];
+  if (!bestandColFilters[col] || bestandColFilters[col].size === allVals.length) {
+    // Alle ausgewählt → alle abwählen
+    bestandColFilters[col] = new Set();
+  } else {
+    // Nicht alle ausgewählt → alle auswählen
+    delete bestandColFilters[col];
+  }
+  refreshPopupAndTable(col);
+}
+
+function refreshPopupAndTable(col) {
   renderBestandTable();
+  updateClearFilterBtn();
   const thIdx = bestandCols.findIndex(c => c.key === col);
   const th = document.querySelector(`.bestand-table th:nth-child(${thIdx + 1})`);
   if (th) {
@@ -1248,6 +1276,20 @@ function clearColFilter(col) {
   delete bestandColFilters[col];
   closeColPopup();
   renderBestandTable();
+  updateClearFilterBtn();
+}
+
+function clearAllFilters() {
+  bestandColFilters = {};
+  closeColPopup();
+  renderBestandTable();
+  updateClearFilterBtn();
+}
+
+function updateClearFilterBtn() {
+  const btn = document.getElementById('btnClearAllFilters');
+  const hasFilters = Object.keys(bestandColFilters).some(k => bestandColFilters[k] && bestandColFilters[k].size > 0);
+  btn.style.display = hasFilters ? '' : 'none';
 }
 
 function closeColPopup() {
