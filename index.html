@@ -163,7 +163,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v16</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v17</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -261,7 +261,7 @@
   <div class="card" style="padding:0.4rem">
     <div style="display:flex;gap:0.4rem">
       <button class="btn btn-accent" onclick="syncBestandFromHIT()" style="flex:1;margin-bottom:0">🔄 HIT Daten sync</button>
-      <button class="btn btn-ghost" id="btnClearAllFilters" onclick="clearAllFilters()" style="flex:1;margin-bottom:0;display:none">✕ Filter löschen</button>
+      <button class="btn btn-ghost" id="btnClearAllFilters" onclick="clearAllFilters()" style="flex:1;margin-bottom:0;opacity:0.35;pointer-events:none">✕ Filter löschen</button>
     </div>
   </div>
   <div id="colPopup" class="col-popup" style="display:none"></div>
@@ -1225,6 +1225,44 @@ function openColPopup(ev, col) {
   popup.style.top = top + 'px';
 }
 
+function openColPopupAtPos(col, left, top) {
+  // Popup-Inhalt generieren ohne Position aus th
+  const popup = document.getElementById('colPopup');
+  const colDef = bestandCols.find(c => c.key === col);
+  const allVals = [...new Set(bestandAllData.map(t => getDisplayVal(t, col)))].sort((a, b) => {
+    const an = parseFloat(a), bn = parseFloat(b);
+    if (!isNaN(an) && !isNaN(bn)) return an - bn;
+    return String(a).localeCompare(String(b));
+  });
+  const activeFilter = bestandColFilters[col] || new Set();
+  let html = `<div class="col-popup-title">${colDef.label}</div>`;
+  html += `<button class="col-popup-btn ${bestandSortCol === col && bestandSortAsc ? 'active' : ''}" onclick="doSort('${col}',true)">▲ Aufsteigend</button>`;
+  html += `<button class="col-popup-btn ${bestandSortCol === col && !bestandSortAsc ? 'active' : ''}" onclick="doSort('${col}',false)">▼ Absteigend</button>`;
+  if (allVals.length <= 50) {
+    html += '<div class="col-popup-sep"></div>';
+    const noFilter = !bestandColFilters[col];
+    const allSelected = noFilter || activeFilter.size === allVals.length;
+    html += `<div class="col-popup-val ${allSelected ? 'selected' : ''}" onclick="event.stopPropagation();toggleAllColFilter('${col}')" style="font-weight:600;border-bottom:1px solid var(--border);margin-bottom:0.2rem;padding-bottom:0.4rem">
+      <span class="chk">${allSelected ? '✓' : ''}</span>
+      <span>Alle</span>
+    </div>`;
+    html += '<div class="col-popup-values">';
+    allVals.forEach(v => {
+      const sel = noFilter || activeFilter.has(v);
+      const vSafe = String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      html += `<div class="col-popup-val ${sel ? 'selected' : ''}" onclick="event.stopPropagation();toggleColFilter('${col}','${vSafe}')">
+        <span class="chk">${sel ? '✓' : ''}</span>
+        <span>${v}</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  popup.innerHTML = html;
+  popup.style.display = 'block';
+  popup.style.left = left;
+  popup.style.top = top;
+}
+
 function doSort(col, asc) {
   bestandSortCol = col;
   bestandSortAsc = asc;
@@ -1265,14 +1303,25 @@ function toggleAllColFilter(col) {
   refreshPopupAndTable(col);
 }
 
+let _lastPopupPos = null;
+
 function refreshPopupAndTable(col) {
+  // Popup-Position merken bevor die Tabelle neu gerendert wird
+  const popup = document.getElementById('colPopup');
+  if (popup.style.display !== 'none') {
+    _lastPopupPos = { left: popup.style.left, top: popup.style.top };
+  }
   renderBestandTable();
   updateClearFilterBtn();
+  // Popup neu öffnen — th aus neuer Tabelle holen, oder gespeicherte Position nutzen
   const thIdx = bestandCols.findIndex(c => c.key === col);
   const th = document.querySelector(`.bestand-table th:nth-child(${thIdx + 1})`);
   if (th) {
     const fakeEv = { stopPropagation: () => {}, target: th };
     openColPopup(fakeEv, col);
+  } else if (_lastPopupPos) {
+    // Kein th (leere Liste) — Popup an alter Position mit neuem Inhalt öffnen
+    openColPopupAtPos(col, _lastPopupPos.left, _lastPopupPos.top);
   }
 }
 
@@ -1292,7 +1341,13 @@ function clearAllFilters() {
 
 function updateClearFilterBtn() {
   const btn = document.getElementById('btnClearAllFilters');
-  btn.style.display = hasActiveFilters() ? '' : 'none';
+  if (hasActiveFilters()) {
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = '';
+  } else {
+    btn.style.opacity = '0.35';
+    btn.style.pointerEvents = 'none';
+  }
 }
 
 function closeColPopup() {
