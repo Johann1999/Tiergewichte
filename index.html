@@ -147,7 +147,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v9</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v10</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -588,11 +588,12 @@ document.addEventListener('click', e => {
 
 // ── EINSTALLEN ──────────────────────────────────────
 async function einstallen() {
-  const nr        = document.getElementById('inpOhrmarkeNeu').value.trim().padStart(5, '0');
+  const rawNr     = document.getElementById('inpOhrmarkeNeu').value.trim();
+  const nr        = rawNr.padStart(5, '0');
   const rasse     = document.getElementById('selRasseNeu').value;
   const gewicht   = parseFloat(document.getElementById('inpGewichtNeu').value);
 
-  if (!nr || nr.length !== 5) { toast('Bitte 5-stellige Ohrmarke eingeben', true); return; }
+  if (!rawNr || rawNr.length < 5) { toast('Ohrmarke muss 5 Stellen haben', true); return; }
   if (!rasse)      { toast('Bitte Rasse wählen', true); return; }
   if (isNaN(gewicht) || gewicht <= 0) { toast('Bitte Gewicht eingeben', true); return; }
 
@@ -606,20 +607,16 @@ async function einstallen() {
   saveS();
   updateSyncDot();
 
-  const btn = document.querySelector('#page-einstallen .btn-accent');
-  btn.disabled = true; btn.textContent = '⏳ Speichere…';
+  toast("Eingestallt ✓");
 
-  const ok = await sendeEintrag(entry);
-  if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
+  document.getElementById("inpOhrmarkeNeu").value = "";
+  document.getElementById("ohrmarkeStatus").textContent = "";
+  document.getElementById("inpGewichtNeu").value = "";
+  gewichteCache = null;
 
-  btn.disabled = false; btn.textContent = '+ Tier einstallen';
-  toast(ok ? 'Eingestallt ✓' : 'Lokal gespeichert – wird später gesendet', !ok);
-
-  // Felder leeren
-  document.getElementById('inpOhrmarkeNeu').value = '';
-  document.getElementById('ohrmarkeStatus').textContent = '';
-  document.getElementById('inpGewichtNeu').value = '';
-  gewichteCache = null; // invalidieren
+  sendeEintrag(entry).then(ok => {
+    if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
+  });
 }
 
 // ── WIEGEN ──────────────────────────────────────────
@@ -637,36 +634,20 @@ async function wiegen() {
   updateSyncDot();
 
   const btn = document.getElementById('btnWiegen');
-  btn.disabled = true; btn.textContent = '⏳ Speichere…';
-
-  // ✅ Schneller: Reset UI sofort (nicht warten auf sync)
-  const resetUI = () => {
-    document.getElementById('inpSuche').value = '';
-    document.getElementById('inpGewicht').value = '';
-    document.getElementById('tierInfo').style.display = 'none';
-    document.getElementById('btnWiegen').disabled = true;
-    selectedTier = null;
-  };
-
-  // ✅ Sende parallel (nicht blocking)
-  const ok = await sendeEintrag(entry);
-  if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
-
-  btn.disabled = false; btn.textContent = '✓ Gewicht speichern';
-  toast(ok ? 'Gewogen ✓' : 'Lokal gespeichert – wird später gesendet', !ok);
-
-  // ✅ Cache NICHT nullen - nur aktuell gewiegte Tier entfernen wenn vorhanden
   if (gewichteCache) {
-    gewichteCache.unshift({
-      datum: entry.ts.slice(0,10).split('-').reverse().join('.'),
-      nr: entry.nr,
-      gewicht: entry.gewicht,
-      ereignis: entry.ereignis
-    });
+    gewichteCache.unshift({ datum: entry.ts.slice(0,10).split("-").reverse().join("."), nr: entry.nr, gewicht: entry.gewicht, ereignis: entry.ereignis });
   }
 
-  // Reset
-  resetUI();
+  document.getElementById("inpSuche").value = "";
+  document.getElementById("inpGewicht").value = "";
+  document.getElementById("tierInfo").style.display = "none";
+  document.getElementById("btnWiegen").disabled = true;
+  selectedTier = null;
+  toast("Gewogen ✓");
+
+  sendeEintrag(entry).then(ok => {
+    if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
+  });
 }
 
 // ── GRUPPENWIEGEN ───────────────────────────────────
@@ -731,119 +712,81 @@ async function wiegenGruppe() {
 
   const proTier = gesamt / n;
   const btn = document.querySelector('#page-gruppe .btn-green');
-  btn.disabled = true; btn.textContent = '⏳ Speichere…';
-
-  // ✅ PARALLEL statt seriell: Alle Anfragen gleichzeitig senden
-  const entries = S._selectedGruppe.map(nr => ({
-    id: Date.now() + Math.random(),
-    ts: new Date().toISOString(),
-    nr,
-    gewicht: parseFloat(proTier.toFixed(1)),
-    ereignis,
-    typ: 'gruppe',
-    synced: false
-  }));
+  const now = Date.now();
+  const entries = S._selectedGruppe.map((nr, i) => ({ id: now + i, ts: new Date().toISOString(), nr, gewicht: proTier, ereignis, typ: "gruppe", synced: false }));
 
   S.log.unshift(...entries);
-  saveS();
-
-  // ✅ Alle Requests parallel senden (nicht seriell!)
-  const results = await Promise.all(
-    entries.map(entry => sendeEintrag(entry))
-  );
-
-  // Update sync-Status basierend auf Ergebnisse
-  results.forEach((ok, i) => {
-    if (ok) { entries[i].synced = true; }
-  });
-  saveS();
-  updateSyncDot();
-
-  const erfolge = results.filter(ok => ok).length;
-  btn.disabled = false; btn.textContent = '✓ Gruppe speichern';
-  toast(`${erfolge}/${n} Tiere gespeichert ✓`);
-
-  // Reset
   S._selectedGruppe = [];
   saveS();
-  document.getElementById('inpGewichtGruppe').value = '';
-  renderGruppeList();
-  // ✅ Cache NOT nullen - oder nur aktualisieren wenn nötig
-}
+  updateSyncDot();
+  toast(n + " Tiere gespeichert ✓");
 
+  document.getElementById("inpGewichtGruppe").value = "";
+  renderGruppeList();
+
+  entries.forEach(entry => {
+    sendeEintrag(entry).then(ok => {
+      if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
+    });
+  });
+}
 // ── SENDEN ──────────────────────────────────────────
 async function sendeEintrag(entry) {
   if (!S.scriptUrl) return false;
+  if (entry._sending) return false;          // Duplikat-Schutz
+  entry._sending = true;
   try {
-    // Gewicht-Eintrag (immer)
-    const gewichtRequest = sendToScript({
-      tab: 'Gewichte',
-      f1: entry.ts.slice(0,10).split('-').reverse().join('.'), // dd.mm.yyyy
-      f2: entry.nr,
-      f3: entry.gewicht,
-      f4: entry.ereignis || 'Einstallung'
-    });
-    
-    // Bei Einstallung auch Bestand schreiben (parallel!)
-    let bestandPromise = Promise.resolve(true);
-    if (entry.typ === 'einstallen') {
-      bestandPromise = sendToScript({
-        tab: 'Bestand',
-        f1: entry.nr,
-        f2: entry.rasse,
-        f3: entry.geschlecht
-      });
+    const datum = entry.ts.slice(0,10).split("-").reverse().join(".");
+    const gewichtReq = sendToScript({ tab: "Gewichte", f1: datum, f2: entry.nr, f3: entry.gewicht, f4: entry.ereignis || "Einstallung", f5: String(entry.id) });
+    let bestandReq = Promise.resolve(true);
+    if (entry.typ === "einstallen") {
+      bestandReq = sendToScript({ tab: "Bestand", f1: entry.nr, f2: entry.rasse, f3: entry.geschlecht });
     }
-    
-    // ✅ Parallel warten (nicht serial)
-    const [ok1, ok2] = await Promise.all([gewichtRequest, bestandPromise]);
-    return ok1;
+    const [ok] = await Promise.all([gewichtReq, bestandReq]);
+    return ok;
   } catch(e) { return false; }
+  finally { entry._sending = false; }
 }
 
 async function sendToScript(params) {
   if (!S.scriptUrl) return false;
-  
-  // ✅ Konvertiere numerische Felder vor dem Senden
   const cleanParams = {};
   for (const [key, value] of Object.entries(params)) {
-    if (key.startsWith('f')) {
-      // f1, f2, f3... sind Datenwerte → intelligent konvertieren
-      const num = parseFloat(value);
-      cleanParams[key] = !isNaN(num) && value !== '' ? num : value;
-    } else {
-      // Andere Keys (tab, mode, etc.) als String
-      cleanParams[key] = value;
-    }
+    if (key.startsWith("f")) {
+      const isStrictNum = /^-?[0-9]+(.[0-9]+)?$/.test(String(value));
+      cleanParams[key] = (isStrictNum && value !== "") ? parseFloat(value) : value;
+    } else { cleanParams[key] = value; }
   }
-  
-  const url = S.scriptUrl + '?' + new URLSearchParams(cleanParams).toString();
+  const url = S.scriptUrl + "?" + new URLSearchParams(cleanParams).toString();
   try {
-    const res = await fetch(url, { mode: 'no-cors' });
-    return true;
-  } catch(e) { 
-    return false; 
-  }
+    const res = await fetch(url);
+    return (await res.text()).trim() === "ok";
+  } catch(e) { return false; }
 }
 
 // ── PENDING SYNC ────────────────────────────────────
+let _checkPendingRunning = false;
 async function checkPending() {
-  const unsent = S.log.filter(e => !e.synced);
-  if (!unsent.length) return;
-  const banner = document.getElementById('pendingBanner');
-  banner.style.display = 'block';
-  document.getElementById('pendingText').textContent = `${unsent.length} Eintrag${unsent.length>1?'e':''} ausstehend`;
-
-  for (const entry of unsent) {
-    const ok = await sendeEintrag(entry);
-    if (ok) { entry.synced = true; saveS(); }
-  }
-  updateSyncDot();
-  const still = S.log.filter(e => !e.synced).length;
-  if (!still) { banner.style.display = 'none'; toast('Alle Einträge synchronisiert ✓'); }
-  else document.getElementById('pendingText').textContent = `${still} Eintrag${still>1?'e':''} noch ausstehend`;
+  if (_checkPendingRunning) return;
+  _checkPendingRunning = true;
+  try {
+    const unsent = S.log.filter(e => !e.synced);
+    if (!unsent.length) return;
+    const banner = document.getElementById("pendingBanner");
+    banner.style.display = "block";
+    document.getElementById("pendingText").textContent =
+      unsent.length + " Eintrag" + (unsent.length > 1 ? "e" : "") + " werden synchronisiert…";
+    for (const entry of unsent) {
+      if (entry.synced) continue;
+      const ok = await sendeEintrag(entry);
+      if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
+    }
+    const still = S.log.filter(e => !e.synced).length;
+    if (still === 0) { banner.style.display = "none"; toast("Alle Einträge synchronisiert ✓"); }
+    else document.getElementById("pendingText").textContent =
+      still + " Eintrag" + (still > 1 ? "e" : "") + " noch ausstehend – kein Internet?";
+  } finally { _checkPendingRunning = false; }
 }
-
 window.addEventListener('online', () => { toast('Netz wieder da…'); checkPending(); });
 
 function updateSyncDot() {
