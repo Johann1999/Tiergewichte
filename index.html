@@ -163,7 +163,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v22</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v23</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -181,9 +181,16 @@
   <div id="pendingBanner"><span>⏳</span> <span id="pendingText"></span></div>
   <div class="card">
     <div class="card-label">Neues Tier erfassen</div>
-    <label>LOM (vollständige Ohrmarke)</label>
-    <input type="text" id="inpOhrmarkeNeu" maxlength="15" inputmode="numeric" placeholder="z.B. DE0346012345" oninput="onLomInput()">
-    <div id="ohrmarkeStatus" style="font-size:0.8rem;min-height:1.2rem;margin-top:0.2rem"></div>
+    <label>LOM (Ohrmarke)</label>
+    <div style="display:grid;grid-template-columns:3.8rem 1fr;gap:0.4rem;margin-bottom:0.35rem">
+      <input type="text" id="inpLomCountry" maxlength="2" value="DE"
+        style="text-transform:uppercase;text-align:center;letter-spacing:0.1em;margin-bottom:0"
+        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'');onLomInput()">
+      <input type="text" id="inpOhrmarkeNeu" inputmode="numeric" pattern="[0-9]*" maxlength="12"
+        placeholder="03 654 55112" style="margin-bottom:0"
+        oninput="this.value=this.value.replace(/[^0-9]/g,'');onLomInput()">
+    </div>
+    <div id="ohrmarkeStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem;color:var(--muted)"></div>
     <label>Rasse</label>
     <select id="selRasseNeu">
       <option value="">– Wählen –</option>
@@ -635,25 +642,48 @@ function selectTier(nr) {
 }
 
 // Update Tageszunahme live beim Eingeben
-function parseLom(input) {
-  // Entfernt alles außer Ziffern, extrahiert letzte 5 als nr
-  const digits = input.replace(/[^0-9]/g, '');
+// Formatiert Ziffern als "XX 99 999 99999" (2+3+5 Ziffern-Gruppen)
+function formatLom(country, digits) {
+  const c = (country || 'DE').toUpperCase().slice(0, 2);
+  const d = digits.replace(/\D/g, '');
+  if (d.length < 10) return c + ' ' + d; // unvollständig, trotzdem anzeigen
+  return c + ' ' + d.slice(0,2) + ' ' + d.slice(2,5) + ' ' + d.slice(5,10);
+}
+
+// Formatiert beliebige gespeicherte LOM (mit/ohne Leerzeichen, numerisch) für Anzeige
+function formatLomDisplay(lom) {
+  if (!lom || lom === '–') return '–';
+  const noSp = lom.replace(/\s/g, '');
+  // Alphanumerisch: 2 Buchstaben + 10 Ziffern (z.B. DE0365455112)
+  const m = noSp.match(/^([A-Z]{2})(\d{2})(\d{3})(\d{5})$/);
+  if (m) return m[1] + ' ' + m[2] + ' ' + m[3] + ' ' + m[4];
+  // Numerisch 15-stellig von HIT (276...)
+  if (/^\d{12,15}$/.test(noSp)) {
+    const d = noSp.slice(-10);
+    return 'DE ' + d.slice(0,2) + ' ' + d.slice(2,5) + ' ' + d.slice(5,10);
+  }
+  return lom; // unbekanntes Format: unverändert
+}
+
+function parseLom() {
+  const country = (document.getElementById('inpLomCountry')?.value || 'DE').toUpperCase().trim();
+  const digits  = document.getElementById('inpOhrmarkeNeu').value.replace(/\D/g, '');
   if (digits.length < 5) return { lom: '', nr: '', valid: false };
-  const nr = digits.slice(-5);
-  return { lom: digits, nr: nr, valid: digits.length >= 5 };
+  const nr  = digits.slice(-5).padStart(5, '0');
+  const lom = formatLom(country, digits);
+  return { lom, nr, valid: true, country, digits };
 }
 
 function onLomInput() {
-  const raw = document.getElementById('inpOhrmarkeNeu').value.trim();
   const el = document.getElementById('ohrmarkeStatus');
-  const { nr, lom, valid } = parseLom(raw);
+  const { nr, lom, valid } = parseLom();
   if (!valid) { el.textContent = ''; return; }
   if (S.bestand.find(t => t.nr === nr)) {
     el.style.color = 'var(--red)';
     el.textContent = '⚠ Bereits eingestallt (' + nr + ')';
   } else {
     el.style.color = 'var(--muted)';
-    el.textContent = 'Nr: ' + nr + (lom.length >= 10 ? ' · LOM: ' + lom : '');
+    el.textContent = 'Nr: ' + nr + ' · ' + lom;
   }
 }
 
@@ -668,13 +698,12 @@ document.addEventListener('click', e => {
 
 // ── EINSTALLEN ──────────────────────────────────────
 async function einstallen() {
-  const rawInput  = document.getElementById('inpOhrmarkeNeu').value.trim();
-  const { lom, nr, valid } = parseLom(rawInput);
-  const rasse     = document.getElementById('selRasseNeu').value;
-  const gewicht   = parseFloat(document.getElementById('inpGewichtNeu').value);
+  const { lom, nr, valid } = parseLom();
+  const rasse   = document.getElementById('selRasseNeu').value;
+  const gewicht = parseFloat(document.getElementById('inpGewichtNeu').value);
 
-  if (!valid || nr.length < 5) { toast('Bitte gültige Ohrmarke/LOM eingeben', true); return; }
-  if (!rasse)      { toast('Bitte Rasse wählen', true); return; }
+  if (!valid) { toast('Bitte gültige LOM eingeben (mind. 5 Ziffern)', true); return; }
+  if (!rasse)  { toast('Bitte Rasse wählen', true); return; }
   if (isNaN(gewicht) || gewicht <= 0) { toast('Bitte Gewicht eingeben', true); return; }
 
   if (S.bestand.find(t => t.nr === nr)) {
@@ -682,7 +711,6 @@ async function einstallen() {
     return;
   }
 
-  // Ereignis "Einstallung" — prüfe ob HIT-Meldung nötig
   const erstesEreignis = getEreignisNamen()[0] || 'Einstallung';
   const hitAktion = getHitAktion(erstesEreignis);
 
@@ -703,9 +731,9 @@ async function einstallen() {
     if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
   });
 
-  // HIT Zugangsmeldung
-  if (hitAktion.toLowerCase() === 'zugang' && lom.length >= 10) {
-    sendeHitZugang(lom, entry.ts.slice(0,10)).then(result => {
+  // HIT Zugangsmeldung (lom ohne Leerzeichen übergeben)
+  if (hitAktion.toLowerCase() === 'zugang' && lom.replace(/\s/g,'').length >= 10) {
+    sendeHitZugang(lom.replace(/\s/g,''), entry.ts.slice(0,10)).then(result => {
       if (result && result.success) {
         toast('HIT Zugang gemeldet ✓');
       } else {
@@ -910,7 +938,8 @@ async function sendeEintrag(entry) {
     const gewichtReq = sendToScript({ tab: "Gewichte", f1: datum, f2: entry.nr, f3: entry.gewicht, f4: entry.ereignis || "Einstallung" });
     let bestandReq = Promise.resolve(true);
     if (entry.typ === "einstallen") {
-      bestandReq = sendToScript({ tab: "Bestand", f1: entry.nr, f2: entry.rasse, f3: entry.geschlecht, f4: entry.lom || '' });
+      // Spaltenreihenfolge: nr | rasse | geschlecht | geburtsdatum (leer) | lom
+      bestandReq = sendToScript({ tab: "Bestand", f1: entry.nr, f2: entry.rasse, f3: entry.geschlecht, f4: '', f5: entry.lom || '' });
     }
     const [ok] = await Promise.all([gewichtReq, bestandReq]);
     return ok;
@@ -1179,7 +1208,7 @@ function getDisplayVal(t, col) {
   if (col === 'geschlecht') return t.geschlecht === 'm' ? 'M' : t.geschlecht === 'w' ? 'W' : '–';
   if (col === 'letzterGewicht') return t.letzterGewicht;
   if (col === 'geburtsdatum') return formatDatumKurz(t.geburtsdatum);
-  if (col === 'lom') return t.lom || '–';
+  if (col === 'lom') return formatLomDisplay(t.lom);
   return t[col] || '';
 }
 
@@ -1217,7 +1246,7 @@ function renderBestandTable() {
       <td>${getDisplayVal(t, 'geschlecht')}</td>
       <td>${t.letzterGewicht} kg</td>
       <td>${formatDatumKurz(t.geburtsdatum)}</td>
-      <td>${t.lom || '–'}</td>
+      <td style="font-family:var(--mono);font-size:0.82rem">${formatLomDisplay(t.lom)}</td>
     </tr>`;
   });
 
