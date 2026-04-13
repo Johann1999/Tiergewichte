@@ -167,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v25</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v26</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -231,6 +231,22 @@
       <input type="number" id="inpGewichtOhne" min="0" step="0.1" placeholder="z.B. 85">
       <button class="btn btn-accent" onclick="einstallenOhne()">+ Tier einstallen</button>
     </div>
+  </div>
+
+  <!-- NACHMELDUNG -->
+  <div class="card">
+    <div class="card-label">HIT Meldung bereits eingestallter Tiere</div>
+    <label>LOM (Ohrmarke)</label>
+    <div style="display:grid;grid-template-columns:3.8rem 1fr;gap:0.4rem;margin-bottom:0.35rem">
+      <input type="text" id="inpNachmeldCountry" maxlength="2" value="DE"
+        style="text-transform:uppercase;text-align:center;letter-spacing:0.1em;margin-bottom:0"
+        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'');onNachmeldInput()">
+      <input type="text" id="inpNachmeldLom" inputmode="numeric" pattern="[0-9]*" maxlength="12"
+        placeholder="03 654 55112" style="margin-bottom:0"
+        oninput="this.value=this.value.replace(/[^0-9]/g,'');onNachmeldInput()">
+    </div>
+    <div id="nachmeldStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem"></div>
+    <button class="btn btn-green" id="btnNachmeld" onclick="nachmelden()" disabled>HIT Zugang nachmelden</button>
   </div>
 </div>
 
@@ -793,6 +809,79 @@ async function einstallenOhne() {
   sendeEintrag(entry).then(ok => {
     if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
   });
+}
+
+// ── NACHMELDUNG ────────────────────────────────────
+function onNachmeldInput() {
+  const country = (document.getElementById('inpNachmeldCountry')?.value || 'DE').toUpperCase().trim();
+  const digits  = document.getElementById('inpNachmeldLom').value.replace(/\D/g, '');
+  const el = document.getElementById('nachmeldStatus');
+  const btn = document.getElementById('btnNachmeld');
+  btn.disabled = true;
+
+  if (digits.length < 5) { el.textContent = ''; el.style.color = 'var(--muted)'; return; }
+  const nr = digits.slice(-5).padStart(5, '0');
+  const lom = formatLom(country, digits);
+  const tier = S.bestand.find(t => t.nr === nr);
+
+  if (!tier) {
+    el.style.color = 'var(--red)';
+    el.textContent = '⚠ Kein Tier mit Nr. ' + nr + ' im Bestand';
+    return;
+  }
+  if (tier.lom) {
+    el.style.color = 'var(--red)';
+    el.textContent = '⚠ Tier ' + nr + ' hat bereits LOM: ' + formatLomDisplay(tier.lom);
+    return;
+  }
+  el.style.color = 'var(--green)';
+  el.textContent = '✓ Tier ' + nr + ' (' + tier.rasse + ') · ' + lom;
+  btn.disabled = false;
+}
+
+async function nachmelden() {
+  const country = (document.getElementById('inpNachmeldCountry')?.value || 'DE').toUpperCase().trim();
+  const digits  = document.getElementById('inpNachmeldLom').value.replace(/\D/g, '');
+  if (digits.length < 5) return;
+  const nr  = digits.slice(-5).padStart(5, '0');
+  const lom = formatLom(country, digits);
+  const tier = S.bestand.find(t => t.nr === nr);
+  if (!tier || tier.lom) return;
+
+  const btn = document.getElementById('btnNachmeld');
+  btn.disabled = true;
+  btn.textContent = '⏳ Melde…';
+
+  // LOM lokal speichern
+  tier.lom = lom;
+  saveS();
+
+  // LOM ins Sheet schreiben (Spalte 5)
+  if (S.scriptUrl) {
+    await sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: nr, col: '5', val: lom });
+  }
+
+  // HIT Zugangsmeldung
+  const lomClean = lom.replace(/\s/g, '');
+  const datum = new Date().toISOString().slice(0, 10);
+  // Einstalldatum aus Log suchen
+  const logEntry = S.log.find(e => e.nr === nr && e.typ === 'einstallen');
+  const einstallDatum = logEntry ? logEntry.ts.slice(0, 10) : datum;
+
+  if (S.scriptUrl) {
+    const result = await sendeHitZugang(lomClean, einstallDatum);
+    if (result && result.success) {
+      toast('HIT Zugang für ' + nr + ' nachgemeldet ✓');
+    } else {
+      const grund = result && result.error ? result.error : 'Unbekannter Fehler';
+      toast('HIT Meldung fehlgeschlagen: ' + grund, true);
+    }
+  }
+
+  document.getElementById('inpNachmeldLom').value = '';
+  document.getElementById('nachmeldStatus').textContent = '';
+  btn.textContent = 'HIT Zugang nachmelden';
+  btn.disabled = true;
 }
 
 // ── EINSTALLEN (MIT HIT) ───────────────────────────
