@@ -167,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v26</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v27</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -184,13 +184,35 @@
 <div class="page active" id="page-einstallen">
   <div id="pendingBanner"><span>⏳</span> <span id="pendingText"></span></div>
 
-  <!-- MIT HIT MELDUNG -->
+  <!-- 1. OHNE HIT MELDUNG (Standard) -->
+  <div class="card" id="cardOhneHit">
+    <div style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-bottom:0" onclick="setEinstallModus('ohne')">
+      <div id="chkOhneHit" class="einstall-check checked"></div>
+      <span class="card-label" style="margin-bottom:0">Einstallung ohne HIT Meldung</span>
+    </div>
+    <div id="formOhneHit" style="margin-top:0.5rem">
+      <label>Ohrmarke (letzte 5 Ziffern)</label>
+      <input type="text" id="inpNrOhne" inputmode="numeric" pattern="[0-9]*" maxlength="5"
+        placeholder="z.B. 55112"
+        oninput="this.value=this.value.replace(/[^0-9]/g,'');onNrOhneInput()">
+      <div id="nrOhneStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem;color:var(--muted)"></div>
+      <label>Rasse</label>
+      <select id="selRasseOhne">
+        <option value="">– Wählen –</option>
+      </select>
+      <label>Eingangsgewicht (kg)</label>
+      <input type="number" id="inpGewichtOhne" min="0" step="0.1" placeholder="z.B. 85">
+      <button class="btn btn-accent" onclick="einstallenOhne()">+ Tier einstallen</button>
+    </div>
+  </div>
+
+  <!-- 2. MIT HIT MELDUNG -->
   <div class="card" id="cardMitHit">
-    <div style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-bottom:0.5rem" onclick="setEinstallModus('mit')">
-      <div id="chkMitHit" class="einstall-check checked"></div>
+    <div style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-bottom:0" onclick="setEinstallModus('mit')">
+      <div id="chkMitHit" class="einstall-check"></div>
       <span class="card-label" style="margin-bottom:0">Einstallung mit HIT Meldung</span>
     </div>
-    <div id="formMitHit">
+    <div id="formMitHit" style="display:none;margin-top:0.5rem">
       <label>LOM (Ohrmarke)</label>
       <div style="display:grid;grid-template-columns:3.8rem 1fr;gap:0.4rem;margin-bottom:0.35rem">
         <input type="text" id="inpLomCountry" maxlength="2" value="DE"
@@ -211,42 +233,25 @@
     </div>
   </div>
 
-  <!-- OHNE HIT MELDUNG -->
-  <div class="card" id="cardOhneHit">
-    <div style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-bottom:0" onclick="setEinstallModus('ohne')">
-      <div id="chkOhneHit" class="einstall-check"></div>
-      <span class="card-label" style="margin-bottom:0">Einstallung ohne HIT Meldung</span>
+  <!-- 3. NACHMELDUNG -->
+  <div class="card" id="cardNachmeld">
+    <div style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-bottom:0" onclick="setEinstallModus('nachmeld')">
+      <div id="chkNachmeld" class="einstall-check"></div>
+      <span class="card-label" style="margin-bottom:0">HIT Nachmeldung eingestallter Tiere</span>
     </div>
-    <div id="formOhneHit" style="display:none;margin-top:0.5rem">
-      <label>Ohrmarke (letzte 5 Ziffern)</label>
-      <input type="text" id="inpNrOhne" inputmode="numeric" pattern="[0-9]*" maxlength="5"
-        placeholder="z.B. 55112"
-        oninput="this.value=this.value.replace(/[^0-9]/g,'');onNrOhneInput()">
-      <div id="nrOhneStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem;color:var(--muted)"></div>
-      <label>Rasse</label>
-      <select id="selRasseOhne">
-        <option value="">– Wählen –</option>
-      </select>
-      <label>Eingangsgewicht (kg)</label>
-      <input type="number" id="inpGewichtOhne" min="0" step="0.1" placeholder="z.B. 85">
-      <button class="btn btn-accent" onclick="einstallenOhne()">+ Tier einstallen</button>
+    <div id="formNachmeld" style="display:none;margin-top:0.5rem">
+      <label>LOM (Ohrmarke)</label>
+      <div style="display:grid;grid-template-columns:3.8rem 1fr;gap:0.4rem;margin-bottom:0.35rem">
+        <input type="text" id="inpNachmeldCountry" maxlength="2" value="DE"
+          style="text-transform:uppercase;text-align:center;letter-spacing:0.1em;margin-bottom:0"
+          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'');onNachmeldInput()">
+        <input type="text" id="inpNachmeldLom" inputmode="numeric" pattern="[0-9]*" maxlength="12"
+          placeholder="03 654 55112" style="margin-bottom:0"
+          oninput="this.value=this.value.replace(/[^0-9]/g,'');onNachmeldInput()">
+      </div>
+      <div id="nachmeldStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem"></div>
+      <button class="btn btn-green" id="btnNachmeld" onclick="nachmelden()" disabled>HIT Zugang nachmelden</button>
     </div>
-  </div>
-
-  <!-- NACHMELDUNG -->
-  <div class="card">
-    <div class="card-label">HIT Meldung bereits eingestallter Tiere</div>
-    <label>LOM (Ohrmarke)</label>
-    <div style="display:grid;grid-template-columns:3.8rem 1fr;gap:0.4rem;margin-bottom:0.35rem">
-      <input type="text" id="inpNachmeldCountry" maxlength="2" value="DE"
-        style="text-transform:uppercase;text-align:center;letter-spacing:0.1em;margin-bottom:0"
-        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'');onNachmeldInput()">
-      <input type="text" id="inpNachmeldLom" inputmode="numeric" pattern="[0-9]*" maxlength="12"
-        placeholder="03 654 55112" style="margin-bottom:0"
-        oninput="this.value=this.value.replace(/[^0-9]/g,'');onNachmeldInput()">
-    </div>
-    <div id="nachmeldStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem"></div>
-    <button class="btn btn-green" id="btnNachmeld" onclick="nachmelden()" disabled>HIT Zugang nachmelden</button>
   </div>
 </div>
 
@@ -751,17 +756,16 @@ document.addEventListener('click', e => {
 
 // ── EINSTALL-MODUS ─────────────────────────────────
 function setEinstallModus(modus) {
-  const mitChk  = document.getElementById('chkMitHit');
-  const ohneChk = document.getElementById('chkOhneHit');
-  const mitForm = document.getElementById('formMitHit');
-  const ohneForm = document.getElementById('formOhneHit');
-  if (modus === 'mit') {
-    mitChk.classList.add('checked');   ohneChk.classList.remove('checked');
-    mitForm.style.display = '';        ohneForm.style.display = 'none';
-  } else {
-    ohneChk.classList.add('checked');  mitChk.classList.remove('checked');
-    ohneForm.style.display = '';       mitForm.style.display = 'none';
-  }
+  const panels = [
+    { key: 'ohne',     chk: 'chkOhneHit',  form: 'formOhneHit' },
+    { key: 'mit',      chk: 'chkMitHit',    form: 'formMitHit' },
+    { key: 'nachmeld', chk: 'chkNachmeld',  form: 'formNachmeld' }
+  ];
+  panels.forEach(p => {
+    const active = p.key === modus;
+    document.getElementById(p.chk).classList.toggle('checked', active);
+    document.getElementById(p.form).style.display = active ? '' : 'none';
+  });
 }
 
 function onNrOhneInput() {
