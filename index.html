@@ -163,7 +163,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v19</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v20</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -311,7 +311,7 @@
 const KEY = 'tiergewichte_v1';
 let S = {
   sheetId:   '1pPv0UCSSlTnOCSRo-5Dvggf04grPyHqVnauNyytEkIg',
-  scriptUrl: 'https://script.google.com/macros/s/AKfycbzSS9n8suQgllTLwitJHiI9vs0nmfiVCJDDVpaol4qCTtehYgnBWcJ_PxI2obx10HsU/exec',
+  scriptUrl: 'https://script.google.com/macros/s/AKfycbxzwueT_9RGyH0Ynr4NNkkaP7Ei7Xdd-pERPfIcw0bZZIX5tnuVGFvAk0Y-pU6jnoPC/exec',
   bestand:   [],
   rassen:    [],
   ereignisse:[],
@@ -705,9 +705,13 @@ async function einstallen() {
 
   // HIT Zugangsmeldung
   if (hitAktion.toLowerCase() === 'zugang' && lom.length >= 10) {
-    sendeHitZugang(lom, entry.ts.slice(0,10)).then(ok => {
-      if (ok) toast('HIT Zugang gemeldet ✓');
-      else toast('HIT Meldung fehlgeschlagen', true);
+    sendeHitZugang(lom, entry.ts.slice(0,10)).then(result => {
+      if (result && result.success) {
+        toast('HIT Zugang gemeldet ✓');
+      } else {
+        const grund = result && result.error ? result.error : 'Unbekannter Fehler';
+        toast('HIT Meldung fehlgeschlagen: ' + grund, true);
+      }
     });
   }
 }
@@ -915,15 +919,13 @@ async function sendeEintrag(entry) {
 }
 
 async function sendeHitZugang(lom, datum) {
-  if (!S.scriptUrl) return false;
+  if (!S.scriptUrl) return { error: 'Script URL nicht konfiguriert' };
   try {
     const url = S.scriptUrl + '?action=hitZugang&lom=' + encodeURIComponent(lom) + '&datum=' + encodeURIComponent(datum);
     const res = await fetch(url);
-    const data = await res.json();
-    return data && !data.error;
+    return await res.json();
   } catch(e) {
-    console.log('HIT Zugangsmeldung fehlgeschlagen:', e);
-    return false;
+    return { error: 'Netzwerkfehler: ' + e.message };
   }
 }
 
