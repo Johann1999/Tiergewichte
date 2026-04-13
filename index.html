@@ -1442,17 +1442,19 @@ async function editTierNr(altNr) {
 
   // Im Sheet: Nr in Bestand (Spalte 1) + Gewichte (Spalte 2) umbenennen
   if (S.scriptUrl) {
+    let renamed = false;
+    // Versuche renameNr-Action (ändert Bestand + Gewichte in einem Aufruf)
     try {
       const url = S.scriptUrl + '?action=renameNr&altNr=' + encodeURIComponent(altNr) + '&neuNr=' + encodeURIComponent(clean);
       const res = await fetch(url);
-      const data = await res.json();
-      if (data.success) {
-        toast('Tier ' + altNr + ' → ' + clean + ' umbenannt (' + data.changed + ' Einträge) ✓');
-      } else {
-        toast('Lokal umbenannt, Sheet-Fehler', true);
-      }
-    } catch(e) {
-      toast('Lokal umbenannt, Sheet nicht erreichbar', true);
+      const txt = await res.text();
+      const data = JSON.parse(txt);
+      if (data.success) { renamed = true; toast('Tier ' + altNr + ' → ' + clean + ' umbenannt (' + data.changed + ' Einträge) ✓'); }
+    } catch(_) {}
+    // Fallback: renameNr nicht verfügbar → Bestand-Nr per upsert ändern
+    if (!renamed) {
+      await sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: altNr, col: '1', val: clean });
+      toast('Tier ' + altNr + ' → ' + clean + ' umbenannt ✓\nHinweis: Apps Script neu deployen für Gewichte-Umbenennung', true);
     }
   } else {
     toast('Tier ' + altNr + ' → ' + clean + ' umbenannt ✓');
