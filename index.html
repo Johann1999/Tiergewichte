@@ -372,7 +372,7 @@
 const KEY = 'tiergewichte_v1';
 let S = {
   sheetId:   '1pPv0UCSSlTnOCSRo-5Dvggf04grPyHqVnauNyytEkIg',
-  scriptUrl: 'https://script.google.com/macros/s/AKfycbwdpq471oA_WUEOobyiJofk3a9MbQoSCfS14PlGuf_LCI_BdH33gXAEWA50Wp2baY53/exec',
+  scriptUrl: 'https://script.google.com/macros/s/AKfycbxqxlPQsk5zGJ-VKZwE7Q_qgM5RSbVi6runkVI554R_D8TgiFqwqqWA1fuyS9BqcTKB/exec',
   bestand:   [],
   rassen:    [],
   ereignisse:[],
@@ -1443,18 +1443,28 @@ async function editTierNr(altNr) {
   // Im Sheet: Nr in Bestand (Spalte 1) + Gewichte (Spalte 2) umbenennen
   if (S.scriptUrl) {
     let renamed = false;
-    // Versuche renameNr-Action (ändert Bestand + Gewichte in einem Aufruf)
+    // renameNr-Action: ändert Bestand + Gewichte in einem Aufruf
     try {
       const url = S.scriptUrl + '?action=renameNr&altNr=' + encodeURIComponent(altNr) + '&neuNr=' + encodeURIComponent(clean);
       const res = await fetch(url);
       const txt = await res.text();
-      const data = JSON.parse(txt);
-      if (data.success) { renamed = true; toast('Tier ' + altNr + ' → ' + clean + ' umbenannt (' + data.changed + ' Einträge) ✓'); }
-    } catch(_) {}
-    // Fallback: renameNr nicht verfügbar → Bestand-Nr per upsert ändern
+      try {
+        const data = JSON.parse(txt);
+        if (data.success) {
+          renamed = true;
+          toast('Tier ' + altNr + ' → ' + clean + ' umbenannt (' + data.changed + ' Einträge) ✓');
+        } else {
+          console.log('renameNr Fehler:', data);
+        }
+      } catch(_) {
+        console.log('renameNr Antwort kein JSON:', txt.slice(0, 200));
+      }
+    } catch(e) {
+      console.log('renameNr fetch Fehler:', e.message);
+    }
     if (!renamed) {
       await sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: altNr, col: '1', val: clean });
-      toast('Tier ' + altNr + ' → ' + clean + ' umbenannt ✓\nHinweis: Apps Script neu deployen für Gewichte-Umbenennung', true);
+      toast('Tier ' + altNr + ' → ' + clean + ' (nur Bestand, bitte Apps Script neu deployen)', true);
     }
   } else {
     toast('Tier ' + altNr + ' → ' + clean + ' umbenannt ✓');
