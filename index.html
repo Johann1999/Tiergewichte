@@ -167,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v28</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v29</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -1433,23 +1433,34 @@ async function editTierNr(altNr) {
     return;
   }
 
-  // Lokal in S.bestand aktualisieren
+  // Lokal aktualisieren: Bestand + Log + gewichteCache
   const local = S.bestand.find(t => t.nr === altNr);
-  if (local) { local.nr = clean; saveS(); }
-
-  // Log-Einträge aktualisieren
+  if (local) local.nr = clean;
   S.log.forEach(e => { if (e.nr === altNr) e.nr = clean; });
+  if (gewichteCache) gewichteCache.forEach(e => { if (e.nr === altNr) e.nr = clean; });
   saveS();
 
-  // Im Sheet: alte Nr durch neue ersetzen (Spalte 1 in Bestand)
+  // Im Sheet: Nr in Bestand (Spalte 1) + Gewichte (Spalte 2) umbenennen
   if (S.scriptUrl) {
-    await sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: altNr, col: '1', val: clean });
+    try {
+      const url = S.scriptUrl + '?action=renameNr&altNr=' + encodeURIComponent(altNr) + '&neuNr=' + encodeURIComponent(clean);
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) {
+        toast('Tier ' + altNr + ' → ' + clean + ' umbenannt (' + data.changed + ' Einträge) ✓');
+      } else {
+        toast('Lokal umbenannt, Sheet-Fehler', true);
+      }
+    } catch(e) {
+      toast('Lokal umbenannt, Sheet nicht erreichbar', true);
+    }
+  } else {
+    toast('Tier ' + altNr + ' → ' + clean + ' umbenannt ✓');
   }
 
   // bestandAllData aktualisieren und neu rendern
   tier.nr = clean;
   renderBestandTable();
-  toast('Tier ' + altNr + ' → ' + clean + ' umbenannt ✓');
 }
 
 function renderBestandTable() {
