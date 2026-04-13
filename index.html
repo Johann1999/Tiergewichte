@@ -167,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v27</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v28</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -1413,6 +1413,45 @@ const bestandCols = [
   { key: 'lom', label: 'LOM' }
 ];
 
+async function editTierNr(altNr) {
+  const tier = bestandAllData.find(t => t.nr === altNr);
+  if (!tier) return;
+
+  if (tier.lom && tier.lom !== '–') {
+    const ok = confirm('Achtung: Für Tier ' + altNr + ' liegt bereits eine LOM vor (' + formatLomDisplay(tier.lom) + ').\n\nNummer trotzdem ändern?');
+    if (!ok) return;
+  }
+
+  const neuNr = prompt('Neue 5-stellige Nummer für Tier ' + altNr + ':', altNr);
+  if (!neuNr || neuNr.trim() === altNr) return;
+
+  const clean = neuNr.trim().replace(/\D/g, '').padStart(5, '0').slice(-5);
+  if (clean.length < 5) { toast('Bitte 5 Ziffern eingeben', true); return; }
+
+  if (bestandAllData.find(t => t.nr === clean && t.nr !== altNr)) {
+    toast('Tier ' + clean + ' existiert bereits!', true);
+    return;
+  }
+
+  // Lokal in S.bestand aktualisieren
+  const local = S.bestand.find(t => t.nr === altNr);
+  if (local) { local.nr = clean; saveS(); }
+
+  // Log-Einträge aktualisieren
+  S.log.forEach(e => { if (e.nr === altNr) e.nr = clean; });
+  saveS();
+
+  // Im Sheet: alte Nr durch neue ersetzen (Spalte 1 in Bestand)
+  if (S.scriptUrl) {
+    await sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: altNr, col: '1', val: clean });
+  }
+
+  // bestandAllData aktualisieren und neu rendern
+  tier.nr = clean;
+  renderBestandTable();
+  toast('Tier ' + altNr + ' → ' + clean + ' umbenannt ✓');
+}
+
 function renderBestandTable() {
   const el = document.getElementById('bestandTabelle');
   const filtered = getFilteredBestand();
@@ -1433,7 +1472,7 @@ function renderBestandTable() {
   filtered.forEach(t => {
     const ic = t.incomplete ? 'incomplete' : '';
     html += `<tr class="${ic}">
-      <td class="bestand-nr">${t.nr}</td>
+      <td class="bestand-nr" style="cursor:pointer" onclick="editTierNr('${t.nr}')">${t.nr}</td>
       <td>${t.rasse}</td>
       <td>${getDisplayVal(t, 'geschlecht')}</td>
       <td>${t.letzterGewicht} kg</td>
