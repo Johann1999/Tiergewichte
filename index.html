@@ -156,6 +156,10 @@
 
   .empty { text-align: center; padding: 2rem 1rem; color: var(--muted); }
   .empty-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+
+  .einstall-check { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); background: var(--bg); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .einstall-check.checked { border-color: var(--accent); background: var(--accent); }
+  .einstall-check.checked::after { content: '✓'; color: #0f1009; font-size: 0.75rem; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -163,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v24</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v25</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -179,25 +183,54 @@
 <!-- EINSTALLEN -->
 <div class="page active" id="page-einstallen">
   <div id="pendingBanner"><span>⏳</span> <span id="pendingText"></span></div>
-  <div class="card">
-    <div class="card-label">Neues Tier erfassen</div>
-    <label>LOM (Ohrmarke)</label>
-    <div style="display:grid;grid-template-columns:3.8rem 1fr;gap:0.4rem;margin-bottom:0.35rem">
-      <input type="text" id="inpLomCountry" maxlength="2" value="DE"
-        style="text-transform:uppercase;text-align:center;letter-spacing:0.1em;margin-bottom:0"
-        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'');onLomInput()">
-      <input type="text" id="inpOhrmarkeNeu" inputmode="numeric" pattern="[0-9]*" maxlength="12"
-        placeholder="03 654 55112" style="margin-bottom:0"
-        oninput="this.value=this.value.replace(/[^0-9]/g,'');onLomInput()">
+
+  <!-- MIT HIT MELDUNG -->
+  <div class="card" id="cardMitHit">
+    <div style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-bottom:0.5rem" onclick="setEinstallModus('mit')">
+      <div id="chkMitHit" class="einstall-check checked"></div>
+      <span class="card-label" style="margin-bottom:0">Einstallung mit HIT Meldung</span>
     </div>
-    <div id="ohrmarkeStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem;color:var(--muted)"></div>
-    <label>Rasse</label>
-    <select id="selRasseNeu">
-      <option value="">– Wählen –</option>
-    </select>
-    <label>Eingangsgewicht (kg)</label>
-    <input type="number" id="inpGewichtNeu" min="0" step="0.1" placeholder="z.B. 85">
-    <button class="btn btn-accent" onclick="einstallen()">+ Tier einstallen</button>
+    <div id="formMitHit">
+      <label>LOM (Ohrmarke)</label>
+      <div style="display:grid;grid-template-columns:3.8rem 1fr;gap:0.4rem;margin-bottom:0.35rem">
+        <input type="text" id="inpLomCountry" maxlength="2" value="DE"
+          style="text-transform:uppercase;text-align:center;letter-spacing:0.1em;margin-bottom:0"
+          oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'');onLomInput()">
+        <input type="text" id="inpOhrmarkeNeu" inputmode="numeric" pattern="[0-9]*" maxlength="12"
+          placeholder="03 654 55112" style="margin-bottom:0"
+          oninput="this.value=this.value.replace(/[^0-9]/g,'');onLomInput()">
+      </div>
+      <div id="ohrmarkeStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem;color:var(--muted)"></div>
+      <label>Rasse</label>
+      <select id="selRasseNeu">
+        <option value="">– Wählen –</option>
+      </select>
+      <label>Eingangsgewicht (kg)</label>
+      <input type="number" id="inpGewichtNeu" min="0" step="0.1" placeholder="z.B. 85">
+      <button class="btn btn-accent" onclick="einstallen()">+ Tier einstallen</button>
+    </div>
+  </div>
+
+  <!-- OHNE HIT MELDUNG -->
+  <div class="card" id="cardOhneHit">
+    <div style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;margin-bottom:0" onclick="setEinstallModus('ohne')">
+      <div id="chkOhneHit" class="einstall-check"></div>
+      <span class="card-label" style="margin-bottom:0">Einstallung ohne HIT Meldung</span>
+    </div>
+    <div id="formOhneHit" style="display:none;margin-top:0.5rem">
+      <label>Ohrmarke (letzte 5 Ziffern)</label>
+      <input type="text" id="inpNrOhne" inputmode="numeric" pattern="[0-9]*" maxlength="5"
+        placeholder="z.B. 55112"
+        oninput="this.value=this.value.replace(/[^0-9]/g,'');onNrOhneInput()">
+      <div id="nrOhneStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem;color:var(--muted)"></div>
+      <label>Rasse</label>
+      <select id="selRasseOhne">
+        <option value="">– Wählen –</option>
+      </select>
+      <label>Eingangsgewicht (kg)</label>
+      <input type="number" id="inpGewichtOhne" min="0" step="0.1" placeholder="z.B. 85">
+      <button class="btn btn-accent" onclick="einstallenOhne()">+ Tier einstallen</button>
+    </div>
   </div>
 </div>
 
@@ -507,15 +540,18 @@ function getHitAktion(ereignisName) {
 }
 
 function fuelleRassen() {
-  const sel = document.getElementById('selRasseNeu');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">– Wählen –</option>';
-  S.rassen.forEach(r => {
-    const o = document.createElement('option');
-    o.value = o.textContent = r;
-    sel.appendChild(o);
+  ['selRasseNeu', 'selRasseOhne'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">– Wählen –</option>';
+    S.rassen.forEach(r => {
+      const o = document.createElement('option');
+      o.value = o.textContent = r;
+      sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
   });
-  if (cur) sel.value = cur;
 }
 
 // ── SHEET SUCHE ─────────────────────────────────────
@@ -697,7 +733,69 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.search-wrap')) document.getElementById('suggestions').style.display = 'none';
 });
 
-// ── EINSTALLEN ──────────────────────────────────────
+// ── EINSTALL-MODUS ─────────────────────────────────
+function setEinstallModus(modus) {
+  const mitChk  = document.getElementById('chkMitHit');
+  const ohneChk = document.getElementById('chkOhneHit');
+  const mitForm = document.getElementById('formMitHit');
+  const ohneForm = document.getElementById('formOhneHit');
+  if (modus === 'mit') {
+    mitChk.classList.add('checked');   ohneChk.classList.remove('checked');
+    mitForm.style.display = '';        ohneForm.style.display = 'none';
+  } else {
+    ohneChk.classList.add('checked');  mitChk.classList.remove('checked');
+    ohneForm.style.display = '';       mitForm.style.display = 'none';
+  }
+}
+
+function onNrOhneInput() {
+  const digits = document.getElementById('inpNrOhne').value.replace(/\D/g, '');
+  const el = document.getElementById('nrOhneStatus');
+  if (digits.length < 5) { el.textContent = digits.length > 0 ? digits.length + '/5 Ziffern' : ''; return; }
+  const nr = digits.slice(-5).padStart(5, '0');
+  if (S.bestand.find(t => t.nr === nr)) {
+    el.style.color = 'var(--red)';
+    el.textContent = '⚠ Bereits eingestallt (' + nr + ')';
+  } else {
+    el.style.color = 'var(--muted)';
+    el.textContent = 'Nr: ' + nr;
+  }
+}
+
+async function einstallenOhne() {
+  const digits = document.getElementById('inpNrOhne').value.replace(/\D/g, '');
+  if (digits.length < 5) { toast('Bitte mind. 5 Ziffern eingeben', true); return; }
+  const nr = digits.slice(-5).padStart(5, '0');
+  const rasse   = document.getElementById('selRasseOhne').value;
+  const gewicht = parseFloat(document.getElementById('inpGewichtOhne').value);
+
+  if (!rasse)  { toast('Bitte Rasse wählen', true); return; }
+  if (isNaN(gewicht) || gewicht <= 0) { toast('Bitte Gewicht eingeben', true); return; }
+
+  if (S.bestand.find(t => t.nr === nr)) {
+    toast(`Tier ${nr} ist bereits eingestallt!`, true);
+    return;
+  }
+
+  const erstesEreignis = getEreignisNamen()[0] || 'Einstallung';
+  const entry = { id: Date.now(), ts: new Date().toISOString(), nr, lom: '', rasse, geschlecht: '', gewicht, ereignis: erstesEreignis, typ: 'einstallen', synced: false };
+  S.log.unshift(entry);
+  S.bestand.push({ nr, rasse, geschlecht: '', lom: '' });
+  saveS();
+  updateSyncDot();
+  toast("Eingestallt ✓ (ohne HIT)");
+
+  document.getElementById("inpNrOhne").value = "";
+  document.getElementById("nrOhneStatus").textContent = "";
+  document.getElementById("inpGewichtOhne").value = "";
+  gewichteCache = null;
+
+  sendeEintrag(entry).then(ok => {
+    if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
+  });
+}
+
+// ── EINSTALLEN (MIT HIT) ───────────────────────────
 async function einstallen() {
   const { lom, nr, valid } = parseLom();
   const rasse   = document.getElementById('selRasseNeu').value;
