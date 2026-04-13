@@ -163,7 +163,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v20</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v21</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -934,7 +934,7 @@ async function sendToScript(params) {
   const cleanParams = {};
   for (const [key, value] of Object.entries(params)) {
     if (key.startsWith("f")) {
-      const isStrictNum = /^-?[0-9]+(.[0-9]+)?$/.test(String(value));
+      const isStrictNum = /^-?[0-9]+(\.[0-9]+)?$/.test(String(value));
       cleanParams[key] = (isStrictNum && value !== "") ? parseFloat(value) : value;
     } else { cleanParams[key] = value; }
   }
