@@ -167,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v29</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v30</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -356,6 +356,17 @@
     <button class="btn btn-accent" onclick="testScript()">Verbindung testen</button>
   </div>
   <div class="card">
+    <div class="card-label">HIT Zugangsdaten</div>
+    <div class="info-box">Betriebsnummer und PIN für HIT-Meldungen. Die Daten werden im Sheet-Tab <strong>Einstellungen</strong> gespeichert.</div>
+    <div id="hitCredsList"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:0.4rem;margin-top:0.4rem">
+      <input type="text" id="inpNewBnr" placeholder="Betriebsnr." style="margin-bottom:0;font-size:1rem">
+      <input type="password" id="inpNewPin" placeholder="PIN" style="margin-bottom:0;font-size:1rem">
+      <button class="btn btn-accent" onclick="addHitCred()" style="margin-bottom:0;padding:0.45rem 0.8rem;font-size:0.9rem;white-space:nowrap">+ Hinzufügen</button>
+    </div>
+    <div id="hitCredsStatus" style="font-size:0.82rem;color:var(--muted);margin-top:0.3rem"></div>
+  </div>
+  <div class="card">
     <div class="card-label">Rassen verwalten</div>
     <div class="info-box">Trage Rassen im Sheet-Tab <strong>Rassen</strong> ein (Spalte A). Sie werden automatisch geladen.</div>
     <div id="rassenStatus" style="font-size:0.82rem;color:var(--muted)"></div>
@@ -372,10 +383,11 @@
 const KEY = 'tiergewichte_v1';
 let S = {
   sheetId:   '1pPv0UCSSlTnOCSRo-5Dvggf04grPyHqVnauNyytEkIg',
-  scriptUrl: 'https://script.google.com/macros/s/AKfycbxqxlPQsk5zGJ-VKZwE7Q_qgM5RSbVi6runkVI554R_D8TgiFqwqqWA1fuyS9BqcTKB/exec',
+  scriptUrl: 'https://script.google.com/macros/s/AKfycbxbOu0U-kcpdSALsMeX5lAKkAxmTNyTbpZISnPiDBK2OqVHtse8k-mtJ04HkrjdIIKw/exec',
   bestand:   [],
   rassen:    [],
   ereignisse:[],
+  hitCredentials: [],  // [{bnr, pin}]
   log:       [],
   _selectedGruppe: [],
 };
@@ -435,9 +447,105 @@ if (S.hiTierScriptUrl) {
 if (S.sheetId) startBoot();
 updateSyncDot();
 renderLog();
+renderHitCreds();
+
+// ── HIT CREDENTIALS VERWALTUNG ─────────────────────
+async function ladeHitCredentials() {
+  if (!S.scriptUrl) return;
+  try {
+    const res = await fetch(S.scriptUrl + '?action=getCredentials');
+    const data = await res.json();
+    if (data.credentials && Array.isArray(data.credentials)) {
+      S.hitCredentials = data.credentials;
+      saveS();
+      renderHitCreds();
+    }
+  } catch(e) { console.log('Fehler beim Laden der Credentials:', e); }
+}
+
+function renderHitCreds() {
+  const el = document.getElementById('hitCredsList');
+  if (!el) return;
+  if (!S.hitCredentials || !S.hitCredentials.length) {
+    el.innerHTML = '<div style="font-size:0.82rem;color:var(--muted);padding:0.3rem 0">Keine Betriebe konfiguriert</div>';
+    return;
+  }
+  el.innerHTML = S.hitCredentials.map((c, i) => `<div style="display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0;border-bottom:1px solid var(--border)">
+    <span style="font-family:var(--mono);font-size:0.95rem;color:var(--accent);flex:1">${c.bnr}</span>
+    <span style="font-size:0.8rem;color:var(--muted)">${c.pin ? '●●●●' : 'kein PIN'}</span>
+    <button onclick="testHitCred(${i})" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:0.2rem 0.5rem;font-size:0.75rem;cursor:pointer">Test</button>
+    <button onclick="removeHitCred(${i})" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:6px;padding:0.2rem 0.5rem;font-size:0.75rem;cursor:pointer">✕</button>
+  </div>`).join('');
+}
+
+async function addHitCred() {
+  const bnr = document.getElementById('inpNewBnr').value.trim();
+  const pin = document.getElementById('inpNewPin').value.trim();
+  if (!bnr) { toast('Bitte Betriebsnummer eingeben', true); return; }
+
+  // Duplikat prüfen
+  if (S.hitCredentials.find(c => c.bnr === bnr)) {
+    toast('Betrieb ' + bnr + ' ist bereits konfiguriert', true);
+    return;
+  }
+
+  S.hitCredentials.push({ bnr, pin });
+  saveS();
+  renderHitCreds();
+
+  // Im Sheet speichern
+  if (S.scriptUrl) {
+    await fetch(S.scriptUrl + '?action=saveCredentials&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin));
+  }
+
+  document.getElementById('inpNewBnr').value = '';
+  document.getElementById('inpNewPin').value = '';
+  toast('Betrieb ' + bnr + ' hinzugefügt ✓');
+  fuelleEreignisse();
+}
+
+async function removeHitCred(idx) {
+  const cred = S.hitCredentials[idx];
+  if (!confirm('Betrieb ' + cred.bnr + ' entfernen?')) return;
+  S.hitCredentials.splice(idx, 1);
+  saveS();
+  renderHitCreds();
+
+  // Im Sheet: PIN leeren (oder Zeile löschen – hier einfach PIN leeren)
+  if (S.scriptUrl) {
+    await fetch(S.scriptUrl + '?action=saveCredentials&bnr=' + encodeURIComponent(cred.bnr) + '&pin=');
+  }
+  toast('Betrieb ' + cred.bnr + ' entfernt');
+  fuelleEreignisse();
+}
+
+async function testHitCred(idx) {
+  const cred = S.hitCredentials[idx];
+  const st = document.getElementById('hitCredsStatus');
+  st.innerHTML = connLine('spin', 'Teste ' + cred.bnr + '…');
+  try {
+    const res = await fetch(S.scriptUrl + '?action=testConnection&bnr=' + encodeURIComponent(cred.bnr) + '&pin=' + encodeURIComponent(cred.pin));
+    const data = await res.json();
+    if (data.connected) {
+      st.innerHTML = connLine('ok', cred.bnr + ': Verbindung OK ✓');
+    } else {
+      st.innerHTML = connLine('err', cred.bnr + ': ' + (data.message || 'Fehler'));
+    }
+  } catch(e) {
+    st.innerHTML = connLine('err', 'Verbindungsfehler: ' + e.message);
+  }
+}
+
+function getCredForBnr(bnr) {
+  return S.hitCredentials.find(c => c.bnr === bnr) || null;
+}
+
+function getFirstCred() {
+  return S.hitCredentials.length > 0 ? S.hitCredentials[0] : null;
+}
 
 async function startBoot() {
-  await Promise.all([ladeBestand(true), ladeEreignisse(), ladeRassen()]);
+  await Promise.all([ladeBestand(true), ladeEreignisse(), ladeRassen(), ladeHitCredentials()]);
 }
 
 // ── TABS ────────────────────────────────────────────
@@ -509,10 +617,31 @@ async function ladeEreignisse() {
     const res = await fetch(url);
     if (!res.ok) return;
     const rows = parseCSV(await res.text());
-    S.ereignisse = rows.slice(1).filter(r => r[0]?.trim()).map(r => ({
-      name: r[0].trim(),
-      hitAktion: (r[1] || '').trim()
-    }));
+    // Header: Name, dann optional Betriebsnr-Spalten mit Wert zugang/abgang
+    // Altes Format: Name, hitAktion (eine Spalte)
+    // Neues Format: Name, Betrieb1, Betrieb2, ... (Spalten = Betriebsnr aus Header)
+    const header = rows[0] || [];
+    const betriebCols = header.slice(1).map(h => h.trim()).filter(Boolean);
+
+    S.ereignisse = rows.slice(1).filter(r => r[0]?.trim()).map(r => {
+      const evt = { name: r[0].trim(), hitAktionen: {} };
+      // Altes Format (eine Spalte "hitAktion"): Rückwärtskompatibilität
+      if (betriebCols.length === 1 && (betriebCols[0].toLowerCase() === 'hitaktion' || betriebCols[0].toLowerCase() === 'hit')) {
+        evt.hitAktion = (r[1] || '').trim();
+      } else {
+        // Neues Format: pro Betrieb eine Spalte
+        betriebCols.forEach((bnr, i) => {
+          const val = (r[i + 1] || '').trim().toLowerCase();
+          if (val === 'zugang' || val === 'abgang') {
+            evt.hitAktionen[bnr] = val;
+          }
+        });
+        // hitAktion für Rückwärtskompatibilität: erste gefundene Aktion
+        const firstAktion = Object.values(evt.hitAktionen)[0];
+        evt.hitAktion = firstAktion || '';
+      }
+      return evt;
+    });
     saveS();
     fuelleEreignisse();
   } catch(e) {}
@@ -557,7 +686,33 @@ function getHitAktion(ereignisName) {
   if (!S.ereignisse || !S.ereignisse.length) return '';
   if (typeof S.ereignisse[0] === 'string') return '';
   const evt = S.ereignisse.find(e => e.name === ereignisName);
-  return evt ? evt.hitAktion : '';
+  return evt ? (evt.hitAktion || '') : '';
+}
+
+// Gibt alle HIT-Aktionen pro Betrieb für ein Ereignis zurück
+// Returns: [{bnr, pin, aktion:'zugang'|'abgang'}, ...]
+function getHitAktionenProBetrieb(ereignisName) {
+  if (!S.ereignisse || !S.ereignisse.length) return [];
+  const evt = S.ereignisse.find(e => e.name === ereignisName);
+  if (!evt) return [];
+
+  const result = [];
+  // Neues Format: hitAktionen pro Betrieb
+  if (evt.hitAktionen && Object.keys(evt.hitAktionen).length > 0) {
+    for (const [bnr, aktion] of Object.entries(evt.hitAktionen)) {
+      const cred = getCredForBnr(bnr);
+      if (cred) {
+        result.push({ bnr: cred.bnr, pin: cred.pin, aktion });
+      }
+    }
+  } else if (evt.hitAktion) {
+    // Altes Format: eine Aktion für den ersten Betrieb
+    const cred = getFirstCred();
+    if (cred) {
+      result.push({ bnr: cred.bnr, pin: cred.pin, aktion: evt.hitAktion });
+    }
+  }
+  return result;
 }
 
 function fuelleRassen() {
@@ -865,7 +1020,7 @@ async function nachmelden() {
     await sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: nr, col: '5', val: lom });
   }
 
-  // HIT Zugangsmeldung
+  // HIT Zugangsmeldung auf erstem Betrieb
   const lomClean = lom.replace(/\s/g, '');
   const datum = new Date().toISOString().slice(0, 10);
   // Einstalldatum aus Log suchen
@@ -873,12 +1028,17 @@ async function nachmelden() {
   const einstallDatum = logEntry ? logEntry.ts.slice(0, 10) : datum;
 
   if (S.scriptUrl) {
-    const result = await sendeHitZugang(lomClean, einstallDatum);
-    if (result && result.success) {
-      toast('HIT Zugang für ' + nr + ' nachgemeldet ✓');
+    const cred = getFirstCred();
+    if (cred) {
+      const result = await sendeHitZugang(lomClean, einstallDatum, cred.bnr, cred.pin);
+      if (result && result.success) {
+        toast('HIT Zugang für ' + nr + ' auf ' + cred.bnr + ' nachgemeldet ✓');
+      } else {
+        const grund = result && result.error ? result.error : 'Unbekannter Fehler';
+        toast('HIT Meldung fehlgeschlagen: ' + grund, true);
+      }
     } else {
-      const grund = result && result.error ? result.error : 'Unbekannter Fehler';
-      toast('HIT Meldung fehlgeschlagen: ' + grund, true);
+      toast('Keine HIT-Zugangsdaten konfiguriert', true);
     }
   }
 
@@ -923,16 +1083,21 @@ async function einstallen() {
     if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
   });
 
-  // HIT Zugangsmeldung (lom ohne Leerzeichen übergeben)
-  if (hitAktion.toLowerCase() === 'zugang' && lom.replace(/\s/g,'').length >= 10) {
-    sendeHitZugang(lom.replace(/\s/g,''), entry.ts.slice(0,10)).then(result => {
-      if (result && result.success) {
-        toast('HIT Zugang gemeldet ✓');
-      } else {
-        const grund = result && result.error ? result.error : 'Unbekannter Fehler';
-        toast('HIT Meldung fehlgeschlagen: ' + grund, true);
-      }
-    });
+  // HIT-Meldungen pro Betrieb absetzen
+  const lomClean = lom.replace(/\s/g,'');
+  if (lomClean.length >= 10) {
+    const aktionen = getHitAktionenProBetrieb(erstesEreignis);
+    for (const a of aktionen) {
+      const meldeFn = a.aktion === 'abgang' ? sendeHitAbgang : sendeHitZugang;
+      meldeFn(lomClean, entry.ts.slice(0,10), a.bnr, a.pin).then(result => {
+        if (result && result.success) {
+          toast('HIT ' + a.aktion + ' auf ' + a.bnr + ' ✓');
+        } else {
+          const grund = result && result.error ? result.error : 'Unbekannter Fehler';
+          toast('HIT ' + a.aktion + ' ' + a.bnr + ': ' + grund, true);
+        }
+      });
+    }
   }
 }
 
@@ -980,6 +1145,24 @@ async function wiegen() {
   sendeEintrag(entry).then(ok => {
     if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
   });
+
+  // HIT-Meldungen pro Betrieb bei diesem Ereignis
+  const tier = S.bestand.find(t => t.nr === entry.nr);
+  const tierLom = tier && tier.lom ? tier.lom.replace(/\s/g, '') : '';
+  if (tierLom.length >= 10) {
+    const aktionen = getHitAktionenProBetrieb(ereignis);
+    for (const a of aktionen) {
+      const meldeFn = a.aktion === 'abgang' ? sendeHitAbgang : sendeHitZugang;
+      meldeFn(tierLom, entry.ts.slice(0,10), a.bnr, a.pin).then(result => {
+        if (result && result.success) {
+          toast('HIT ' + a.aktion + ' auf ' + a.bnr + ' ✓');
+        } else {
+          const grund = result && result.error ? result.error : 'Unbekannter Fehler';
+          toast('HIT ' + a.aktion + ' ' + a.bnr + ': ' + grund, true);
+        }
+      });
+    }
+  }
 }
 
 // ── GRUPPENWIEGEN ───────────────────────────────────
@@ -1139,10 +1322,32 @@ async function sendeEintrag(entry) {
   finally { entry._sending = false; }
 }
 
-async function sendeHitZugang(lom, datum) {
+async function sendeHitZugang(lom, datum, bnr, pin) {
   if (!S.scriptUrl) return { error: 'Script URL nicht konfiguriert' };
+  // Falls kein bnr/pin übergeben, ersten konfigurierten Betrieb nehmen
+  if (!bnr || !pin) {
+    const cred = getFirstCred();
+    if (!cred) return { error: 'Keine HIT-Zugangsdaten konfiguriert' };
+    bnr = cred.bnr; pin = cred.pin;
+  }
   try {
-    const url = S.scriptUrl + '?action=hitZugang&lom=' + encodeURIComponent(lom) + '&datum=' + encodeURIComponent(datum);
+    const url = S.scriptUrl + '?action=hitZugang&lom=' + encodeURIComponent(lom) + '&datum=' + encodeURIComponent(datum) + '&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin);
+    const res = await fetch(url);
+    return await res.json();
+  } catch(e) {
+    return { error: 'Netzwerkfehler: ' + e.message };
+  }
+}
+
+async function sendeHitAbgang(lom, datum, bnr, pin) {
+  if (!S.scriptUrl) return { error: 'Script URL nicht konfiguriert' };
+  if (!bnr || !pin) {
+    const cred = getFirstCred();
+    if (!cred) return { error: 'Keine HIT-Zugangsdaten konfiguriert' };
+    bnr = cred.bnr; pin = cred.pin;
+  }
+  try {
+    const url = S.scriptUrl + '?action=hitAbgang&lom=' + encodeURIComponent(lom) + '&datum=' + encodeURIComponent(datum) + '&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin);
     const res = await fetch(url);
     return await res.json();
   } catch(e) {
@@ -1274,16 +1479,21 @@ function resetAlles() {
 }
 
 // ── HI TIER INTEGRATION ──────────────────────────────
-async function getHITierDaten(ohrmarke) {
+async function getHITierDaten(ohrmarke, bnr, pin) {
   if (!S.scriptUrl) return null;
+  if (!bnr || !pin) {
+    const cred = getFirstCred();
+    if (!cred) return null;
+    bnr = cred.bnr; pin = cred.pin;
+  }
   try {
-    const url = S.scriptUrl + '?action=getTier&ohrmarke=' + encodeURIComponent(ohrmarke);
+    const url = S.scriptUrl + '?action=getTier&ohrmarke=' + encodeURIComponent(ohrmarke) + '&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin);
     const res = await fetch(url);
     const data = await res.json();
     if (data && !data.error) return data;
     return null;
   } catch(e) {
-    console.log('Fehler beim Abrufen von HI Tier:', e);
+    console.log('Fehler beim Abrufen von HIT:', e);
     return null;
   }
 }
@@ -1293,20 +1503,25 @@ async function testHITierConnection() {
     toast('Apps Script URL nicht konfiguriert', true);
     return;
   }
-  
+  const cred = getFirstCred();
+  if (!cred) {
+    toast('Keine HIT-Zugangsdaten konfiguriert', true);
+    return;
+  }
+
   const st = document.getElementById('scriptStatus');
-  st.innerHTML = connLine('spin', 'Teste…');
-  
+  st.innerHTML = connLine('spin', 'Teste HIT mit ' + cred.bnr + '…');
+
   try {
-    const res = await fetch(S.scriptUrl + '?action=testConnection');
+    const res = await fetch(S.scriptUrl + '?action=testConnection&bnr=' + encodeURIComponent(cred.bnr) + '&pin=' + encodeURIComponent(cred.pin));
     const data = await res.json();
-    
+
     if (data.connected) {
-      st.innerHTML = connLine('ok', 'HI Tier verbunden ✓');
-      toast('HI Tier Verbindung OK ✓');
+      st.innerHTML = connLine('ok', 'HIT verbunden ✓ (' + cred.bnr + ')');
+      toast('HIT Verbindung OK ✓');
     } else {
-      st.innerHTML = connLine('err', 'HI Tier nicht erreichbar');
-      toast('HI Tier Fehler: ' + data.message, true);
+      st.innerHTML = connLine('err', 'HIT nicht erreichbar: ' + (data.message || ''));
+      toast('HIT Fehler: ' + data.message, true);
     }
   } catch(e) {
     st.innerHTML = connLine('err', 'Verbindungsfehler');
@@ -1352,6 +1567,7 @@ async function renderBestand() {
         geschlecht: r[2]?.trim().toLowerCase() || '–',
         geburtsdatum: r[3]?.trim() || '',
         lom: r[4]?.trim() || '',
+        betrieb: r[5]?.trim() || '',
         letzterGewicht: latestWeights[r[0].trim()] || '–',
         incomplete: !r[2]?.trim() || !r[3]?.trim() || !r[4]?.trim()
       }));
@@ -1410,7 +1626,8 @@ const bestandCols = [
   { key: 'geschlecht', label: 'Gesch.' },
   { key: 'letzterGewicht', label: 'Gewicht' },
   { key: 'geburtsdatum', label: 'Geb.datum' },
-  { key: 'lom', label: 'LOM' }
+  { key: 'lom', label: 'LOM' },
+  { key: 'betrieb', label: 'Betrieb' }
 ];
 
 async function editTierNr(altNr) {
@@ -1501,6 +1718,7 @@ function renderBestandTable() {
       <td>${t.letzterGewicht} kg</td>
       <td>${formatDatumKurz(t.geburtsdatum)}</td>
       <td style="font-family:var(--mono);font-size:0.82rem">${formatLomDisplay(t.lom)}</td>
+      <td style="font-family:var(--mono);font-size:0.82rem">${t.betrieb || '–'}</td>
     </tr>`;
   });
 
@@ -1713,6 +1931,12 @@ async function syncBestandFromHIT() {
     return;
   }
 
+  if (!S.hitCredentials.length) {
+    toast('Keine HIT-Zugangsdaten konfiguriert', true);
+    btn.disabled = false; btn.textContent = '🔄 HIT Daten sync';
+    return;
+  }
+
   const incomplete = bestandAllData.filter(t => !t.geburtsdatum || !t.lom);
   if (!incomplete.length) {
     toast('Alle Tiere haben HIT Daten ✓');
@@ -1722,26 +1946,29 @@ async function syncBestandFromHIT() {
 
   const banner = document.getElementById('pendingBanner');
   banner.style.display = 'block';
-  document.getElementById('pendingText').textContent = 'Lade HIT Bestandsregister…';
 
   try {
-    // Einmal alle HIT-Daten laden (statt ein Request pro Tier)
-    const res = await fetch(S.scriptUrl + '?action=getBestand');
-    const hitTiere = await res.json();
-
-    if (hitTiere.error) {
-      toast('HIT Fehler: ' + hitTiere.error, true);
-      banner.style.display = 'none';
-      btn.disabled = false; btn.textContent = '🔄 HIT Daten sync';
-      return;
+    // Alle Betriebe abfragen und Ergebnisse zusammenführen
+    let allHitTiere = [];
+    for (const cred of S.hitCredentials) {
+      document.getElementById('pendingText').textContent = 'Lade HIT Bestandsregister für ' + cred.bnr + '…';
+      const res = await fetch(S.scriptUrl + '?action=getBestand&bnr=' + encodeURIComponent(cred.bnr) + '&pin=' + encodeURIComponent(cred.pin));
+      const hitTiere = await res.json();
+      if (hitTiere.error) {
+        toast('HIT Fehler für ' + cred.bnr + ': ' + hitTiere.error, true);
+        continue;
+      }
+      if (Array.isArray(hitTiere)) {
+        allHitTiere = allHitTiere.concat(hitTiere);
+      }
     }
 
     // Lokal matchen: letzte 5 Stellen der Ohrmarke
     const updates = [];
     for (const tier of incomplete) {
-      const hit = hitTiere.find(h => h.lom5 === String(tier.nr).padStart(5, '0'));
+      const hit = allHitTiere.find(h => h.lom5 === String(tier.nr).padStart(5, '0'));
       if (hit && hit.geburtsdatum) {
-        updates.push({ nr: tier.nr, geschlecht: hit.geschlecht, geburtsdatum: hit.geburtsdatum, lom: hit.lom });
+        updates.push({ nr: tier.nr, geschlecht: hit.geschlecht, geburtsdatum: hit.geburtsdatum, lom: hit.lom, betrieb: hit.betrieb || '' });
       }
     }
 
@@ -1757,7 +1984,8 @@ async function syncBestandFromHIT() {
     await Promise.all(updates.flatMap(u => [
       sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: u.nr, col: '3', val: u.geschlecht }),
       sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: u.nr, col: '4', val: u.geburtsdatum }),
-      sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: u.nr, col: '5', val: u.lom })
+      sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: u.nr, col: '5', val: u.lom }),
+      sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: u.nr, col: '6', val: u.betrieb })
     ]));
 
     banner.style.display = 'none';
