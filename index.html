@@ -167,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v31</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v32</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -730,10 +730,11 @@ function getHitAktion(ereignisName) {
 // Gibt alle HIT-Aktionen pro Betrieb für ein Ereignis zurück
 // Returns: [{bnr, pin, aktion:'zugang'|'abgang'}, ...]
 function getHitAktionenProBetrieb(ereignisName) {
-  if (!S.ereignisse || !S.ereignisse.length) return [];
+  if (!S.ereignisse || !S.ereignisse.length) { console.log('[HIT] Keine Ereignisse geladen'); return []; }
   const evt = S.ereignisse.find(e => e.name === ereignisName);
-  if (!evt) return [];
+  if (!evt) { console.log('[HIT] Ereignis "' + ereignisName + '" nicht in S.ereignisse gefunden'); return []; }
 
+  console.log('[HIT] Ereignis gefunden:', JSON.stringify(evt));
   const result = [];
   // Neues Format: hitAktionen pro Betrieb
   if (evt.hitAktionen && Object.keys(evt.hitAktionen).length > 0) {
@@ -741,6 +742,8 @@ function getHitAktionenProBetrieb(ereignisName) {
       const cred = getCredForBnr(bnr);
       if (cred) {
         result.push({ bnr: cred.bnr, pin: cred.pin, aktion });
+      } else {
+        console.log('[HIT] ⚠ Keine Credentials für BNR "' + bnr + '" – in Einstellungen hinterlegt?');
       }
     }
   } else if (evt.hitAktion) {
@@ -748,7 +751,11 @@ function getHitAktionenProBetrieb(ereignisName) {
     const cred = getFirstCred();
     if (cred) {
       result.push({ bnr: cred.bnr, pin: cred.pin, aktion: evt.hitAktion });
+    } else {
+      console.log('[HIT] ⚠ Kein Betrieb konfiguriert für hitAktion');
     }
+  } else {
+    console.log('[HIT] ⚠ Weder hitAktionen noch hitAktion für dieses Ereignis');
   }
   return result;
 }
@@ -1187,9 +1194,20 @@ async function wiegen() {
   // HIT-Meldungen pro Betrieb bei diesem Ereignis
   const tier = S.bestand.find(t => t.nr === entry.nr);
   const tierLom = tier && tier.lom ? tier.lom.replace(/\s/g, '') : '';
-  if (tierLom.length >= 10) {
+  console.log('[HIT-Wiegen] Tier:', entry.nr, 'LOM:', tierLom, 'Ereignis:', ereignis);
+  console.log('[HIT-Wiegen] Ereignisse geladen:', JSON.stringify(S.ereignisse));
+  console.log('[HIT-Wiegen] Credentials:', S.hitCredentials.map(c => c.bnr));
+
+  if (tierLom.length < 10) {
+    console.log('[HIT-Wiegen] ⚠ Keine LOM (< 10 Zeichen) → keine HIT-Meldung');
+  } else {
     const aktionen = getHitAktionenProBetrieb(ereignis);
+    console.log('[HIT-Wiegen] Aktionen für "' + ereignis + '":', JSON.stringify(aktionen));
+    if (!aktionen.length) {
+      console.log('[HIT-Wiegen] ⚠ Keine HIT-Aktionen konfiguriert für dieses Ereignis');
+    }
     for (const a of aktionen) {
+      console.log('[HIT-Wiegen] → Sende ' + a.aktion + ' an ' + a.bnr);
       const meldeFn = a.aktion === 'abgang' ? sendeHitAbgang : sendeHitZugang;
       meldeFn(tierLom, entry.ts.slice(0,10), a.bnr, a.pin).then(result => {
         if (result && result.success) {
