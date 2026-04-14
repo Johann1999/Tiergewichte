@@ -167,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v30</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v31</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleSetup()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">⚙️</button>
@@ -343,7 +343,7 @@
     <label>Sheet ID</label>
     <input type="text" id="inpSheetId" placeholder="1xmZ…" oninput="saveCfg()">
     <div id="sheetStatus"></div>
-    <button class="btn btn-accent" onclick="ladeBestand(false)">Verbinden & Bestand laden</button>
+    <button class="btn btn-accent" onclick="verbinden()">Verbinden & Bestand laden</button>
   </div>
   <div class="card">
     <div class="card-label">Apps Script</div>
@@ -382,8 +382,8 @@
 // ── STATE ───────────────────────────────────────────
 const KEY = 'tiergewichte_v1';
 let S = {
-  sheetId:   '1pPv0UCSSlTnOCSRo-5Dvggf04grPyHqVnauNyytEkIg',
-  scriptUrl: 'https://script.google.com/macros/s/AKfycbxbOu0U-kcpdSALsMeX5lAKkAxmTNyTbpZISnPiDBK2OqVHtse8k-mtJ04HkrjdIIKw/exec',
+  sheetId:   '',
+  scriptUrl: '',
   bestand:   [],
   rassen:    [],
   ereignisse:[],
@@ -456,7 +456,23 @@ async function ladeHitCredentials() {
     const res = await fetch(S.scriptUrl + '?action=getCredentials');
     const data = await res.json();
     if (data.credentials && Array.isArray(data.credentials)) {
-      S.hitCredentials = data.credentials;
+      // Config-Einträge extrahieren (Sheet ID + Script URL)
+      const configEntries = data.credentials.filter(c => c.bnr.startsWith('__'));
+      const realCreds = data.credentials.filter(c => !c.bnr.startsWith('__'));
+
+      // Sheet ID und Script URL aus Einstellungen übernehmen (falls lokal leer)
+      for (const cfg of configEntries) {
+        if (cfg.bnr === '__SHEET_ID__' && cfg.pin && !S.sheetId) {
+          S.sheetId = cfg.pin;
+          document.getElementById('inpSheetId').value = S.sheetId;
+        }
+        if (cfg.bnr === '__SCRIPT_URL__' && cfg.pin && !S.scriptUrl) {
+          S.scriptUrl = cfg.pin;
+          document.getElementById('inpScriptUrl').value = S.scriptUrl;
+        }
+      }
+
+      S.hitCredentials = realCreds;
       saveS();
       renderHitCreds();
     }
@@ -570,13 +586,35 @@ function toggleLog() {
 
 // ── CONFIG ──────────────────────────────────────────
 function saveCfg() {
+  const oldScriptUrl = S.scriptUrl;
   S.sheetId   = document.getElementById('inpSheetId').value.trim();
   S.scriptUrl = document.getElementById('inpScriptUrl').value.trim();
   saveS();
+
+  // Sheet ID + Script URL auch ins Sheet "Einstellungen" schreiben
+  if (S.scriptUrl && S.scriptUrl !== oldScriptUrl) {
+    // Wenn sich die URL ändert, sofort Sheet ID und URL persistieren
+    persistConfig();
+  }
+}
+
+async function persistConfig() {
+  if (!S.scriptUrl) return;
+  try {
+    await fetch(S.scriptUrl + '?action=saveCredentials&bnr=__SHEET_ID__&pin=' + encodeURIComponent(S.sheetId));
+    await fetch(S.scriptUrl + '?action=saveCredentials&bnr=__SCRIPT_URL__&pin=' + encodeURIComponent(S.scriptUrl));
+  } catch(e) { console.log('Config persistieren fehlgeschlagen:', e); }
 }
 
 function connLine(type, msg) {
   return `<div class="conn-line conn-${type}"><div class="conn-dot"></div><span>${msg}</span></div>`;
+}
+
+async function verbinden() {
+  saveCfg();
+  await ladeBestand(false);
+  // Config ins Sheet persistieren
+  persistConfig();
 }
 
 async function testScript() {
