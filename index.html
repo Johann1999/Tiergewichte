@@ -167,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v34</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v35</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">📋</button>
@@ -564,9 +564,11 @@ async function testHitCred(idx) {
 
 function getCredForBnr(bnr) {
   // Exakter Match oder Suffix-Match (z.B. "0845" matcht "276...0845" und umgekehrt)
-  const clean = bnr.replace(/\D/g, '');
+  const clean = (bnr || '').replace(/\D/g, '');
+  if (!clean) return null; // leere BNR darf nicht matchen
   return S.hitCredentials.find(c => {
-    const cb = c.bnr.replace(/\D/g, '');
+    const cb = (c.bnr || '').replace(/\D/g, '');
+    if (!cb) return false;
     return cb === clean || cb.endsWith(clean) || clean.endsWith(cb);
   }) || null;
 }
@@ -602,6 +604,7 @@ function toggleLog() {
 // ── CONFIG ──────────────────────────────────────────
 function saveCfg() {
   const oldScriptUrl = S.scriptUrl;
+  const oldSheetId = S.sheetId;
   S.sheetId   = document.getElementById('inpSheetId').value.trim();
   S.scriptUrl = document.getElementById('inpScriptUrl').value.trim();
   saveS();
@@ -610,6 +613,12 @@ function saveCfg() {
   if (S.scriptUrl && S.scriptUrl !== oldScriptUrl) {
     // Wenn sich die URL ändert, sofort Sheet ID und URL persistieren
     persistConfig();
+    // Und Credentials aus dem Sheet neu laden (wichtig beim ersten Öffnen auf Handy)
+    ladeHitCredentials();
+  }
+  if (S.sheetId && S.sheetId !== oldSheetId && S.scriptUrl) {
+    // Sheet ID geändert → Credentials neu laden
+    ladeHitCredentials();
   }
 }
 
@@ -630,6 +639,9 @@ async function verbinden() {
   await ladeBestand(false);
   // Config ins Sheet persistieren
   persistConfig();
+  // Credentials + Ereignisse + Rassen aus dem Sheet laden
+  await Promise.all([ladeHitCredentials(), ladeEreignisse(), ladeRassen()]);
+  toast('Alle Daten geladen ✓');
 }
 
 async function testScript() {
