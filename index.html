@@ -167,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v33</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v34</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">📋</button>
@@ -563,7 +563,12 @@ async function testHitCred(idx) {
 }
 
 function getCredForBnr(bnr) {
-  return S.hitCredentials.find(c => c.bnr === bnr) || null;
+  // Exakter Match oder Suffix-Match (z.B. "0845" matcht "276...0845" und umgekehrt)
+  const clean = bnr.replace(/\D/g, '');
+  return S.hitCredentials.find(c => {
+    const cb = c.bnr.replace(/\D/g, '');
+    return cb === clean || cb.endsWith(clean) || clean.endsWith(cb);
+  }) || null;
 }
 
 function getFirstCred() {
@@ -746,12 +751,15 @@ function getHitAktionenProBetrieb(ereignisName) {
   if (!evt) { console.log('[HIT] Ereignis "' + ereignisName + '" nicht in S.ereignisse gefunden'); return []; }
 
   console.log('[HIT] Ereignis gefunden:', JSON.stringify(evt));
+  console.log('[HIT] Gespeicherte Credentials-BNRs:', S.hitCredentials.map(c => c.bnr));
   const result = [];
   // Neues Format: hitAktionen pro Betrieb
   if (evt.hitAktionen && Object.keys(evt.hitAktionen).length > 0) {
     for (const [bnr, aktion] of Object.entries(evt.hitAktionen)) {
+      console.log('[HIT] Suche Credentials für Header-BNR "' + bnr + '" → Aktion: ' + aktion);
       const cred = getCredForBnr(bnr);
       if (cred) {
+        console.log('[HIT] ✓ Match gefunden: ' + cred.bnr);
         result.push({ bnr: cred.bnr, pin: cred.pin, aktion });
       } else {
         console.log('[HIT] ⚠ Keine Credentials für BNR "' + bnr + '" – in Einstellungen hinterlegt?');
