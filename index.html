@@ -167,7 +167,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v35</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v36</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">📋</button>
@@ -461,32 +461,46 @@ renderHitCreds();
 
 // ── HIT CREDENTIALS VERWALTUNG ─────────────────────
 async function ladeHitCredentials() {
-  if (!S.scriptUrl) return;
+  if (!S.scriptUrl) { console.log('[Creds] Kein Script URL → Laden übersprungen'); return; }
   try {
     const res = await fetch(S.scriptUrl + '?action=getCredentials');
     const data = await res.json();
+    console.log('[Creds] Antwort vom Sheet:', JSON.stringify(data));
     if (data.credentials && Array.isArray(data.credentials)) {
       // Config-Einträge extrahieren (Sheet ID + Script URL)
-      const configEntries = data.credentials.filter(c => c.bnr.startsWith('__'));
-      const realCreds = data.credentials.filter(c => !c.bnr.startsWith('__'));
+      const configEntries = data.credentials.filter(c => c.bnr && c.bnr.startsWith('__'));
+      const realCreds = data.credentials.filter(c => c.bnr && !c.bnr.startsWith('__'));
 
       // Sheet ID und Script URL aus Einstellungen übernehmen (falls lokal leer)
       for (const cfg of configEntries) {
         if (cfg.bnr === '__SHEET_ID__' && cfg.pin && !S.sheetId) {
           S.sheetId = cfg.pin;
-          document.getElementById('inpSheetId').value = S.sheetId;
+          const el = document.getElementById('inpSheetId');
+          if (el) el.value = S.sheetId;
         }
         if (cfg.bnr === '__SCRIPT_URL__' && cfg.pin && !S.scriptUrl) {
           S.scriptUrl = cfg.pin;
-          document.getElementById('inpScriptUrl').value = S.scriptUrl;
+          const el = document.getElementById('inpScriptUrl');
+          if (el) el.value = S.scriptUrl;
         }
       }
 
-      S.hitCredentials = realCreds;
-      saveS();
+      // Nur überschreiben wenn Sheet tatsächlich Credentials hat.
+      // Sonst lokale Liste behalten (Schutz bei temporären Fetch-Problemen).
+      if (realCreds.length > 0) {
+        S.hitCredentials = realCreds;
+        saveS();
+        console.log('[Creds] ' + realCreds.length + ' Betriebe geladen:', realCreds.map(c => c.bnr));
+      } else {
+        console.log('[Creds] ⚠ Sheet hat keine Betriebs-Credentials — lokale Liste bleibt: ' + S.hitCredentials.length + ' Einträge');
+      }
       renderHitCreds();
+    } else {
+      console.log('[Creds] ⚠ Keine gültige Antwort — lokale Liste bleibt');
     }
-  } catch(e) { console.log('Fehler beim Laden der Credentials:', e); }
+  } catch(e) {
+    console.log('[Creds] Fehler beim Laden:', e.message);
+  }
 }
 
 function renderHitCreds() {
@@ -602,24 +616,11 @@ function toggleLog() {
 }
 
 // ── CONFIG ──────────────────────────────────────────
+// saveCfg nur lokal — keine Sheet-Writes bei jedem Tastenanschlag!
 function saveCfg() {
-  const oldScriptUrl = S.scriptUrl;
-  const oldSheetId = S.sheetId;
   S.sheetId   = document.getElementById('inpSheetId').value.trim();
   S.scriptUrl = document.getElementById('inpScriptUrl').value.trim();
   saveS();
-
-  // Sheet ID + Script URL auch ins Sheet "Einstellungen" schreiben
-  if (S.scriptUrl && S.scriptUrl !== oldScriptUrl) {
-    // Wenn sich die URL ändert, sofort Sheet ID und URL persistieren
-    persistConfig();
-    // Und Credentials aus dem Sheet neu laden (wichtig beim ersten Öffnen auf Handy)
-    ladeHitCredentials();
-  }
-  if (S.sheetId && S.sheetId !== oldSheetId && S.scriptUrl) {
-    // Sheet ID geändert → Credentials neu laden
-    ladeHitCredentials();
-  }
 }
 
 async function persistConfig() {
@@ -1161,11 +1162,20 @@ async function einstallen() {
 
   // HIT-Meldungen pro Betrieb absetzen
   const lomClean = lom.replace(/\s/g,'');
-  if (lomClean.length >= 10) {
+  console.log('[HIT-Einstallen] LOM:', lomClean, 'Ereignis:', erstesEreignis, 'Credentials:', S.hitCredentials.map(c=>c.bnr));
+  if (lomClean.length < 10) {
+    console.log('[HIT-Einstallen] ⚠ LOM zu kurz → keine HIT-Meldung');
+  } else {
     const aktionen = getHitAktionenProBetrieb(erstesEreignis);
+    console.log('[HIT-Einstallen] Aktionen:', JSON.stringify(aktionen));
+    if (!aktionen.length) {
+      toast('Keine HIT-Aktion für "' + erstesEreignis + '" konfiguriert', true);
+    }
     for (const a of aktionen) {
+      console.log('[HIT-Einstallen] → Sende ' + a.aktion + ' an ' + a.bnr);
       const meldeFn = a.aktion === 'abgang' ? sendeHitAbgang : sendeHitZugang;
       meldeFn(lomClean, entry.ts.slice(0,10), a.bnr, a.pin).then(result => {
+        console.log('[HIT-Einstallen] Antwort ' + a.bnr + ':', JSON.stringify(result));
         if (result && result.success) {
           toast('HIT ' + a.aktion + ' auf ' + a.bnr + ' ✓');
         } else {
