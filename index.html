@@ -152,6 +152,21 @@
   #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   #toast.err  { border-color: var(--red); color: var(--red); }
 
+  /* HIT-Dialog: persistent bei Fehlern, Auto-Dismiss bei Erfolg */
+  .hit-dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .hit-dialog { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 1rem 1.1rem; max-width: 460px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+  .hit-dialog.ok  { border-color: var(--green); }
+  .hit-dialog.err { border-color: var(--red); }
+  .hit-dialog-title { font-weight: 700; font-size: 1rem; margin-bottom: 0.5rem; }
+  .hit-dialog.ok  .hit-dialog-title { color: var(--green); }
+  .hit-dialog.err .hit-dialog-title { color: var(--red); }
+  .hit-dialog-msg { font-size: 0.88rem; color: var(--text); line-height: 1.4; white-space: pre-wrap; word-break: break-word; margin-bottom: 0.8rem; }
+  .hit-dialog-btn { width: 100%; background: var(--accent); color: #000; border: none; border-radius: 10px; padding: 0.6rem; font-weight: 700; font-size: 0.95rem; cursor: pointer; }
+  .hit-dialog.err .hit-dialog-btn { background: var(--red); color: #fff; }
+  .hit-dialog-list { position: fixed; top: 1rem; right: 1rem; z-index: 998; display: flex; flex-direction: column; gap: 0.4rem; max-width: calc(100vw - 2rem); pointer-events: none; }
+  .hit-toast { pointer-events: auto; background: var(--surface); border: 1px solid var(--green); border-radius: 10px; padding: 0.5rem 0.7rem; font-size: 0.82rem; color: var(--text); box-shadow: 0 4px 12px rgba(0,0,0,0.4); animation: hitSlide 0.25s ease; max-width: 360px; }
+  @keyframes hitSlide { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
   #syncDot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex-shrink: 0; display: none; cursor: default; margin-left: 0.4rem; }
 
   .empty { text-align: center; padding: 2rem 1rem; color: var(--muted); }
@@ -167,7 +182,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v37</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v38</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">📋</button>
@@ -387,6 +402,8 @@
 </div>
 
 <div id="toast"></div>
+<div id="hitDialogHost"></div>
+<div id="hitToastList" class="hit-dialog-list"></div>
 
 <script>
 // ── STATE ───────────────────────────────────────────
@@ -1108,14 +1125,10 @@ async function nachmelden() {
     const cred = getFirstCred();
     if (cred) {
       const result = await sendeHitZugang(lomClean, einstallDatum, cred.bnr, cred.pin);
-      if (result && result.success) {
-        toast('HIT Zugang für ' + nr + ' auf ' + cred.bnr + ' nachgemeldet ✓');
-      } else {
-        const grund = result && result.error ? result.error : 'Unbekannter Fehler';
-        toast('HIT Meldung fehlgeschlagen: ' + grund, true);
-      }
+      console.log('[HIT-Nachmelden] Antwort ' + cred.bnr + ':', JSON.stringify(result));
+      hitDialog('zugang', cred.bnr, result);
     } else {
-      toast('Keine HIT-Zugangsdaten konfiguriert', true);
+      hitDialog('zugang', '—', { error: 'Keine HIT-Zugangsdaten konfiguriert' });
     }
   }
 
@@ -1176,12 +1189,10 @@ async function einstallen() {
       const meldeFn = a.aktion === 'abgang' ? sendeHitAbgang : sendeHitZugang;
       meldeFn(lomClean, entry.ts.slice(0,10), a.bnr, a.pin).then(result => {
         console.log('[HIT-Einstallen] Antwort ' + a.bnr + ':', JSON.stringify(result));
-        if (result && result.success) {
-          toast('HIT ' + a.aktion + ' auf ' + a.bnr + ' ✓');
-        } else {
-          const grund = result && result.error ? result.error : 'Unbekannter Fehler';
-          toast('HIT ' + a.aktion + ' ' + a.bnr + ': ' + grund, true);
-        }
+        hitDialog(a.aktion, a.bnr, result);
+      }).catch(err => {
+        console.log('[HIT-Einstallen] ✗ Fetch-Fehler ' + a.bnr + ':', err.message);
+        hitDialog(a.aktion, a.bnr, { error: 'Netzwerkfehler: ' + err.message });
       });
     }
   }
@@ -1252,15 +1263,10 @@ async function wiegen() {
       const meldeFn = a.aktion === 'abgang' ? sendeHitAbgang : sendeHitZugang;
       meldeFn(tierLom, entry.ts.slice(0,10), a.bnr, a.pin).then(result => {
         console.log('[HIT-Wiegen] ← Antwort ' + a.aktion + ' ' + a.bnr + ':', JSON.stringify(result));
-        if (result && result.success) {
-          toast('HIT ' + a.aktion + ' auf ' + a.bnr + ' ✓');
-        } else {
-          const grund = result && result.error ? result.error : 'Unbekannter Fehler';
-          toast('HIT ' + a.aktion + ' ' + a.bnr + ': ' + grund, true);
-        }
+        hitDialog(a.aktion, a.bnr, result);
       }).catch(err => {
         console.log('[HIT-Wiegen] ✗ Fetch-Fehler ' + a.bnr + ':', err.message);
-        toast('HIT ' + a.aktion + ' ' + a.bnr + ': Netzwerkfehler', true);
+        hitDialog(a.aktion, a.bnr, { error: 'Netzwerkfehler: ' + err.message });
       });
     }
   }
@@ -1570,6 +1576,42 @@ function toast(msg, err=false) {
   t.className = 'show' + (err ? ' err' : '');
   clearTimeout(t._t);
   t._t = setTimeout(() => t.className = '', 3200);
+}
+
+// ── HIT DIALOG (persistent bei Fehler, Auto-Dismiss bei Erfolg) ───
+function hitDialog(typ, bnr, result) {
+  const isOk = !!(result && result.success);
+  const title = (isOk ? '✓ HIT ' : '✗ HIT-Fehler ') + typ + ' · ' + bnr;
+  const msg = isOk
+    ? (result.message || 'Meldung erfolgreich')
+    : (result && result.error ? result.error : 'Unbekannter Fehler');
+
+  if (isOk) {
+    // Erfolg: kleiner Toast oben rechts, verschwindet von allein
+    const list = document.getElementById('hitToastList');
+    const el = document.createElement('div');
+    el.className = 'hit-toast';
+    el.innerHTML = '<div style="font-weight:700;color:var(--green);margin-bottom:0.2rem">' + title + '</div>' +
+                   '<div style="color:var(--muted);font-size:0.78rem">' + escapeHtml(msg) + '</div>';
+    list.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 5000);
+  } else {
+    // Fehler: Modal, muss per Klick bestätigt werden
+    const host = document.getElementById('hitDialogHost');
+    const overlay = document.createElement('div');
+    overlay.className = 'hit-dialog-overlay';
+    overlay.innerHTML = '<div class="hit-dialog err">' +
+      '<div class="hit-dialog-title">' + title + '</div>' +
+      '<div class="hit-dialog-msg">' + escapeHtml(msg) + '</div>' +
+      '<button class="hit-dialog-btn">Verstanden</button>' +
+      '</div>';
+    host.appendChild(overlay);
+    overlay.querySelector('button').onclick = () => overlay.remove();
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 // ── RESET ───────────────────────────────────────────
