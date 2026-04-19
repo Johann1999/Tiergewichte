@@ -167,6 +167,18 @@
   .hit-toast { pointer-events: auto; background: var(--surface); border: 1px solid var(--green); border-radius: 10px; padding: 0.5rem 0.7rem; font-size: 0.82rem; color: var(--text); box-shadow: 0 4px 12px rgba(0,0,0,0.4); animation: hitSlide 0.25s ease; max-width: 360px; }
   @keyframes hitSlide { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
 
+  /* Barcode-Scanner Button + Vollbild-Overlay */
+  .btn-scan { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 0.55rem; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; }
+  .btn-scan:active { background: var(--surface); }
+  .scan-overlay { position: fixed; inset: 0; background: #000; z-index: 2000; display: none; flex-direction: column; }
+  .scan-overlay.active { display: flex; }
+  .scan-overlay video { width: 100%; height: 100%; object-fit: cover; }
+  .scan-guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; max-width: 480px; height: 25%; max-height: 160px; border: 3px solid var(--green); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); pointer-events: none; }
+  .scan-guide::before { content: ''; position: absolute; inset: 20% 5%; border-top: 2px dashed rgba(255,255,255,0.7); top: 50%; height: 0; }
+  .scan-header { position: absolute; top: 0; left: 0; right: 0; padding: 0.8rem 1rem; background: linear-gradient(180deg, rgba(0,0,0,0.7), transparent); color: #fff; font-size: 0.9rem; font-weight: 600; z-index: 1; display: flex; justify-content: space-between; align-items: center; }
+  .scan-header button { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; border-radius: 20px; padding: 0.4rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+  .scan-status { position: absolute; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 0.5rem 1rem; font-size: 0.85rem; white-space: nowrap; max-width: 92vw; overflow: hidden; text-overflow: ellipsis; }
+
   #syncDot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex-shrink: 0; display: none; cursor: default; margin-left: 0.4rem; }
 
   .empty { text-align: center; padding: 2rem 1rem; color: var(--muted); }
@@ -182,7 +194,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v39</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v40</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">📋</button>
@@ -238,6 +250,7 @@
           placeholder="03 654 55112" style="margin-bottom:0"
           oninput="this.value=this.value.replace(/[^0-9]/g,'');onLomInput()">
       </div>
+      <button type="button" class="btn-scan" onclick="startLomScan('inpLomCountry','inpOhrmarkeNeu','onLomInput')">📷 Barcode vom Tierpass scannen</button>
       <div id="ohrmarkeStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem;color:var(--muted)"></div>
       <label>Rasse</label>
       <select id="selRasseNeu">
@@ -265,6 +278,7 @@
           placeholder="03 654 55112" style="margin-bottom:0"
           oninput="this.value=this.value.replace(/[^0-9]/g,'');onNachmeldInput()">
       </div>
+      <button type="button" class="btn-scan" onclick="startLomScan('inpNachmeldCountry','inpNachmeldLom','onNachmeldInput')">📷 Barcode vom Tierpass scannen</button>
       <div id="nachmeldStatus" style="font-size:0.8rem;min-height:1.2rem;margin-bottom:0.25rem"></div>
       <button class="btn btn-green" id="btnNachmeld" onclick="nachmelden()" disabled>HIT Zugang nachmelden</button>
     </div>
@@ -404,6 +418,17 @@
 <div id="toast"></div>
 <div id="hitDialogHost"></div>
 <div id="hitToastList" class="hit-dialog-list"></div>
+
+<!-- Barcode-Scanner Vollbild-Overlay -->
+<div id="scanOverlay" class="scan-overlay">
+  <div class="scan-header">
+    <span>📷 Tierpass-Barcode scannen</span>
+    <button type="button" onclick="stopLomScan()">Abbrechen</button>
+  </div>
+  <video id="scanVideo" playsinline muted autoplay></video>
+  <div class="scan-guide"></div>
+  <div id="scanStatus" class="scan-status">Kamera wird gestartet…</div>
+</div>
 
 <script>
 // ── STATE ───────────────────────────────────────────
@@ -1576,6 +1601,142 @@ function toast(msg, err=false) {
   t.className = 'show' + (err ? ' err' : '');
   clearTimeout(t._t);
   t._t = setTimeout(() => t.className = '', 3200);
+}
+
+// ── BARCODE SCANNER (Tierpass-LOM) ─────────────────
+let _scanState = null;
+
+async function startLomScan(countryInputId, digitsInputId, onInputHandlerName) {
+  // Feature-Check
+  if (!('BarcodeDetector' in window)) {
+    hitDialog('Scan', '—', { error: 'Dieses Gerät/Browser unterstützt die Barcode-Erkennung nicht.\n\nBitte LOM manuell eingeben oder ein aktuelles Android/iOS-Gerät mit Chrome/Safari nutzen.' });
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    hitDialog('Scan', '—', { error: 'Kamera-Zugriff nicht verfügbar.' });
+    return;
+  }
+
+  const overlay = document.getElementById('scanOverlay');
+  const video = document.getElementById('scanVideo');
+  const status = document.getElementById('scanStatus');
+  overlay.classList.add('active');
+  status.textContent = 'Kamera wird gestartet…';
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+  } catch(err) {
+    overlay.classList.remove('active');
+    hitDialog('Scan', '—', { error: 'Kamera-Zugriff verweigert: ' + err.message });
+    return;
+  }
+
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+
+  let detector;
+  try {
+    // Tierpass-Barcodes sind typisch Code 128 (DE+Ziffern), ITF (nur Ziffern) oder EAN-13
+    detector = new BarcodeDetector({ formats: ['code_128', 'itf', 'ean_13', 'code_39', 'codabar'] });
+  } catch(err) {
+    // Fallback ohne formats-Einschränkung
+    detector = new BarcodeDetector();
+  }
+
+  _scanState = { stream, video, overlay, status, active: true, countryInputId, digitsInputId, onInputHandlerName, detector };
+  status.textContent = 'Barcode in den grünen Rahmen halten…';
+  _scanLoop();
+}
+
+async function _scanLoop() {
+  if (!_scanState || !_scanState.active) return;
+  const { video, detector, status } = _scanState;
+
+  if (video.readyState >= 2) {
+    try {
+      const codes = await detector.detect(video);
+      if (codes && codes.length > 0) {
+        const raw = codes[0].rawValue || '';
+        console.log('[Scan] Erkannt:', raw, 'Format:', codes[0].format);
+        const parsed = _parseScannedLom(raw);
+        if (parsed) {
+          _scanState.active = false;
+          status.textContent = '✓ ' + parsed.country + ' ' + parsed.digits;
+          // Haptik-Feedback
+          if (navigator.vibrate) navigator.vibrate(80);
+          // Kurze Anzeige vor Schließen
+          setTimeout(() => _finishScan(parsed), 300);
+          return;
+        } else {
+          status.textContent = '⚠ Unbekanntes Format: ' + raw.slice(0, 30);
+        }
+      }
+    } catch(err) {
+      console.log('[Scan] Detect-Fehler:', err.message);
+    }
+  }
+  // ~4x pro Sekunde scannen
+  setTimeout(_scanLoop, 250);
+}
+
+function _parseScannedLom(raw) {
+  if (!raw) return null;
+  const clean = raw.trim().toUpperCase();
+  // Variante A: 2 Buchstaben + 10 Ziffern (z.B. DE0367628563)
+  let m = clean.match(/([A-Z]{2})\s*(\d{2})\s*(\d{3})\s*(\d{5})/);
+  if (m) return { country: m[1], digits: m[2] + m[3] + m[4] };
+  // Variante B: 15 Ziffern EU-Code (276 = DE → letzte 10 Ziffern nehmen)
+  m = clean.match(/(\d{15})/);
+  if (m) {
+    const d = m[1];
+    const prefix = d.slice(0, 3);
+    const countryMap = { '276': 'DE', '040': 'AT', '756': 'CH', '208': 'DK', '528': 'NL' };
+    const country = countryMap[prefix] || 'DE';
+    return { country, digits: d.slice(-10) };
+  }
+  // Variante C: 12-14 Ziffern (manche Tierpässe: 2-stelliges Länder-Präfix + 10 Ziffern ohne Leerzeichen nach DE)
+  m = clean.match(/(\d{10,14})/);
+  if (m) {
+    const d = m[1].slice(-10);
+    return { country: 'DE', digits: d };
+  }
+  return null;
+}
+
+function _finishScan(parsed) {
+  const { countryInputId, digitsInputId, onInputHandlerName } = _scanState;
+  const countryEl = document.getElementById(countryInputId);
+  const digitsEl = document.getElementById(digitsInputId);
+  if (countryEl) countryEl.value = parsed.country;
+  if (digitsEl) {
+    digitsEl.value = parsed.digits;
+    digitsEl.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  // Zugehörigen onInput-Handler aufrufen (onLomInput / onNachmeldInput)
+  const handler = window[onInputHandlerName];
+  if (typeof handler === 'function') {
+    try { handler(); } catch(e) { console.log('[Scan] Handler-Fehler:', e.message); }
+  }
+  stopLomScan();
+  toast('Barcode erfasst: ' + parsed.country + ' ' + parsed.digits);
+}
+
+function stopLomScan() {
+  if (!_scanState) {
+    document.getElementById('scanOverlay').classList.remove('active');
+    return;
+  }
+  _scanState.active = false;
+  try {
+    _scanState.stream.getTracks().forEach(t => t.stop());
+  } catch(_) {}
+  _scanState.video.srcObject = null;
+  _scanState.overlay.classList.remove('active');
+  _scanState = null;
 }
 
 // ── HIT DIALOG (persistent bei Fehler, Auto-Dismiss bei Erfolg) ───
