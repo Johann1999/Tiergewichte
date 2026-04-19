@@ -177,6 +177,10 @@
   .scan-guide::before { content: ''; position: absolute; inset: 20% 5%; border-top: 2px dashed rgba(255,255,255,0.7); top: 50%; height: 0; }
   .scan-header { position: absolute; top: 0; left: 0; right: 0; padding: 0.8rem 1rem; background: linear-gradient(180deg, rgba(0,0,0,0.7), transparent); color: #fff; font-size: 0.9rem; font-weight: 600; z-index: 1; display: flex; justify-content: space-between; align-items: center; }
   .scan-header button { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; border-radius: 20px; padding: 0.4rem 0.9rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+  .scan-header-right { display: flex; gap: 0.4rem; align-items: center; }
+  .btn-torch { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; border-radius: 50%; width: 2.4rem; height: 2.4rem; font-size: 1.1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+  .btn-torch.on { background: #ffcc00; color: #000; border-color: #ffcc00; box-shadow: 0 0 16px rgba(255,204,0,0.6); }
+  .btn-torch.hidden { display: none; }
   .scan-status { position: absolute; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.75); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; padding: 0.5rem 1rem; font-size: 0.85rem; white-space: nowrap; max-width: 92vw; overflow: hidden; text-overflow: ellipsis; }
 
   #syncDot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); flex-shrink: 0; display: none; cursor: default; margin-left: 0.4rem; }
@@ -194,7 +198,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v40</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v41</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">📋</button>
@@ -423,7 +427,10 @@
 <div id="scanOverlay" class="scan-overlay">
   <div class="scan-header">
     <span>📷 Tierpass-Barcode scannen</span>
-    <button type="button" onclick="stopLomScan()">Abbrechen</button>
+    <div class="scan-header-right">
+      <button type="button" id="btnTorch" class="btn-torch hidden" onclick="toggleTorch()" title="Taschenlampe">💡</button>
+      <button type="button" onclick="stopLomScan()">Abbrechen</button>
+    </div>
   </div>
   <video id="scanVideo" playsinline muted autoplay></video>
   <div class="scan-guide"></div>
@@ -1620,8 +1627,11 @@ async function startLomScan(countryInputId, digitsInputId, onInputHandlerName) {
   const overlay = document.getElementById('scanOverlay');
   const video = document.getElementById('scanVideo');
   const status = document.getElementById('scanStatus');
+  const torchBtn = document.getElementById('btnTorch');
   overlay.classList.add('active');
   status.textContent = 'Kamera wird gestartet…';
+  torchBtn.classList.add('hidden');
+  torchBtn.classList.remove('on');
 
   let stream;
   try {
@@ -1638,6 +1648,11 @@ async function startLomScan(countryInputId, digitsInputId, onInputHandlerName) {
   video.srcObject = stream;
   await video.play().catch(() => {});
 
+  // Taschenlampen-Verfügbarkeit prüfen
+  const track = stream.getVideoTracks()[0];
+  const hasTorch = !!(track && track.getCapabilities && track.getCapabilities().torch);
+  if (hasTorch) torchBtn.classList.remove('hidden');
+
   let detector;
   try {
     // Tierpass-Barcodes sind typisch Code 128 (DE+Ziffern), ITF (nur Ziffern) oder EAN-13
@@ -1647,9 +1662,58 @@ async function startLomScan(countryInputId, digitsInputId, onInputHandlerName) {
     detector = new BarcodeDetector();
   }
 
-  _scanState = { stream, video, overlay, status, active: true, countryInputId, digitsInputId, onInputHandlerName, detector };
+  _scanState = {
+    stream, video, overlay, status, track, hasTorch,
+    torchOn: false, active: true,
+    countryInputId, digitsInputId, onInputHandlerName, detector,
+    lastCandidate: null, lastCandidateCount: 0
+  };
   status.textContent = 'Barcode in den grünen Rahmen halten…';
   _scanLoop();
+}
+
+async function toggleTorch() {
+  if (!_scanState || !_scanState.hasTorch || !_scanState.track) return;
+  const newState = !_scanState.torchOn;
+  try {
+    await _scanState.track.applyConstraints({ advanced: [{ torch: newState }] });
+    _scanState.torchOn = newState;
+    document.getElementById('btnTorch').classList.toggle('on', newState);
+  } catch(err) {
+    console.log('[Scan] Torch-Fehler:', err.message);
+    toast('Taschenlampe nicht verfügbar', true);
+  }
+}
+
+function _guideRectInVideoCoords() {
+  // Rechne das Guide-Rahmen-Rechteck in die Koordinaten um, die BarcodeDetector
+  // in boundingBox liefert (= Pixel-Koordinaten des <video>-Elements).
+  const video = _scanState.video;
+  const guide = document.querySelector('.scan-guide');
+  if (!video || !guide) return null;
+  const vRect = video.getBoundingClientRect();
+  const gRect = guide.getBoundingClientRect();
+  // object-fit: cover → Video-Inhalt ist größer als sichtbarer Bereich.
+  // BarcodeDetector arbeitet auf dem HTMLVideoElement direkt, d.h. boundingBox
+  // ist relativ zum Video-Element (nicht zum Stream-Inhalt). Daher reicht der
+  // Viewport-Offset zwischen Guide und Video.
+  return {
+    left: gRect.left - vRect.left,
+    top: gRect.top - vRect.top,
+    right: gRect.right - vRect.left,
+    bottom: gRect.bottom - vRect.top
+  };
+}
+
+function _codeInGuide(box, guide) {
+  if (!guide || !box) return true; // kein Guide → nicht filtern
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  // 10% Toleranz nach außen
+  const tolX = (guide.right - guide.left) * 0.1;
+  const tolY = (guide.bottom - guide.top) * 0.1;
+  return cx >= guide.left - tolX && cx <= guide.right + tolX
+      && cy >= guide.top - tolY && cy <= guide.bottom + tolY;
 }
 
 async function _scanLoop() {
@@ -1659,21 +1723,50 @@ async function _scanLoop() {
   if (video.readyState >= 2) {
     try {
       const codes = await detector.detect(video);
-      if (codes && codes.length > 0) {
-        const raw = codes[0].rawValue || '';
-        console.log('[Scan] Erkannt:', raw, 'Format:', codes[0].format);
-        const parsed = _parseScannedLom(raw);
-        if (parsed) {
-          _scanState.active = false;
-          status.textContent = '✓ ' + parsed.country + ' ' + parsed.digits;
-          // Haptik-Feedback
-          if (navigator.vibrate) navigator.vibrate(80);
-          // Kurze Anzeige vor Schließen
-          setTimeout(() => _finishScan(parsed), 300);
-          return;
-        } else {
-          status.textContent = '⚠ Unbekanntes Format: ' + raw.slice(0, 30);
+      const guide = _guideRectInVideoCoords();
+
+      // Kandidaten filtern: im Guide-Rahmen + gültiges LOM-Format
+      let picked = null;
+      for (const c of codes || []) {
+        const raw = c.rawValue || '';
+        const inGuide = _codeInGuide(c.boundingBox, guide);
+        if (!inGuide) {
+          console.log('[Scan] ignoriert (außerhalb Rahmen):', raw, c.format);
+          continue;
         }
+        const parsed = _parseScannedLom(raw, c.format);
+        if (!parsed) {
+          console.log('[Scan] ignoriert (kein LOM-Format):', raw, c.format);
+          continue;
+        }
+        picked = { raw, parsed, format: c.format };
+        break;
+      }
+
+      if (picked) {
+        // Debounce: gleicher Wert zweimal hintereinander nötig,
+        // damit keine zufällige Fehllesung durchrutscht.
+        if (_scanState.lastCandidate === picked.raw) {
+          _scanState.lastCandidateCount++;
+        } else {
+          _scanState.lastCandidate = picked.raw;
+          _scanState.lastCandidateCount = 1;
+        }
+        console.log('[Scan] Kandidat (' + _scanState.lastCandidateCount + '/2):', picked.raw, picked.format);
+        status.textContent = '⏳ Prüfe: ' + picked.parsed.country + ' ' + picked.parsed.digits;
+
+        if (_scanState.lastCandidateCount >= 2) {
+          _scanState.active = false;
+          status.textContent = '✓ ' + picked.parsed.country + ' ' + picked.parsed.digits;
+          if (navigator.vibrate) navigator.vibrate(80);
+          setTimeout(() => _finishScan(picked.parsed), 250);
+          return;
+        }
+      } else if (codes && codes.length > 0) {
+        // Irgendwas erkannt, aber nichts akzeptiert → Zähler zurücksetzen
+        _scanState.lastCandidate = null;
+        _scanState.lastCandidateCount = 0;
+        status.textContent = 'Barcode nicht gültig — LOM-Strichcode in den Rahmen halten';
       }
     } catch(err) {
       console.log('[Scan] Detect-Fehler:', err.message);
@@ -1683,27 +1776,39 @@ async function _scanLoop() {
   setTimeout(_scanLoop, 250);
 }
 
-function _parseScannedLom(raw) {
+/**
+ * Strengere LOM-Validierung: Nur echte Tierpass-LOM akzeptieren, nicht
+ * die Registernummer-Barcode unterhalb. Unterscheidungsmerkmale:
+ *   - LOM (Code 128 alphanumerisch): DE/AT/… + 10 Ziffern = 12 Zeichen
+ *   - LOM (ITF/Ziffern 15-stellig): 276/040/756/208/528 + 12 weitere Ziffern
+ *   - Registernummer: 12 Ziffern ohne Country-Präfix → wird abgelehnt
+ */
+function _parseScannedLom(raw, format) {
   if (!raw) return null;
   const clean = raw.trim().toUpperCase();
-  // Variante A: 2 Buchstaben + 10 Ziffern (z.B. DE0367628563)
-  let m = clean.match(/([A-Z]{2})\s*(\d{2})\s*(\d{3})\s*(\d{5})/);
-  if (m) return { country: m[1], digits: m[2] + m[3] + m[4] };
-  // Variante B: 15 Ziffern EU-Code (276 = DE → letzte 10 Ziffern nehmen)
-  m = clean.match(/(\d{15})/);
-  if (m) {
-    const d = m[1];
-    const prefix = d.slice(0, 3);
-    const countryMap = { '276': 'DE', '040': 'AT', '756': 'CH', '208': 'DK', '528': 'NL' };
-    const country = countryMap[prefix] || 'DE';
-    return { country, digits: d.slice(-10) };
+  const digitsOnly = clean.replace(/\D/g, '');
+
+  // Variante A: 2 Buchstaben + 10 Ziffern (Code 128 Tierpass, z.B. DE0367628563)
+  const letterMatch = clean.match(/^\s*([A-Z]{2})\s*(\d{2})\s*(\d{3})\s*(\d{5})\s*$/);
+  if (letterMatch) {
+    const known = ['DE','AT','CH','DK','NL','FR','BE','LU','PL','CZ','IT','ES','UK','IE','SE','NO','FI','HU','SK','SI'];
+    if (known.includes(letterMatch[1])) {
+      return { country: letterMatch[1], digits: letterMatch[2] + letterMatch[3] + letterMatch[4] };
+    }
   }
-  // Variante C: 12-14 Ziffern (manche Tierpässe: 2-stelliges Länder-Präfix + 10 Ziffern ohne Leerzeichen nach DE)
-  m = clean.match(/(\d{10,14})/);
-  if (m) {
-    const d = m[1].slice(-10);
-    return { country: 'DE', digits: d };
+
+  // Variante B: 15 Ziffern EU-Code mit bekanntem ISO-3166-Präfix
+  if (/^\d{15}$/.test(digitsOnly)) {
+    const prefix = digitsOnly.slice(0, 3);
+    const countryMap = { '276': 'DE', '040': 'AT', '756': 'CH', '208': 'DK', '528': 'NL', '250': 'FR', '056': 'BE', '616': 'PL', '203': 'CZ', '380': 'IT', '724': 'ES' };
+    if (countryMap[prefix]) {
+      return { country: countryMap[prefix], digits: digitsOnly.slice(-10) };
+    }
+    // 15 Ziffern aber kein bekannter Präfix → wahrscheinlich keine LOM
+    return null;
   }
+
+  // Alles andere (insb. 12-stellige Ziffernfolgen = Registernummer) ablehnen.
   return null;
 }
 
@@ -1731,11 +1836,17 @@ function stopLomScan() {
     return;
   }
   _scanState.active = false;
+  // Torch aus, bevor der Stream gestoppt wird
+  if (_scanState.torchOn && _scanState.track) {
+    try { _scanState.track.applyConstraints({ advanced: [{ torch: false }] }); } catch(_) {}
+  }
   try {
     _scanState.stream.getTracks().forEach(t => t.stop());
   } catch(_) {}
   _scanState.video.srcObject = null;
   _scanState.overlay.classList.remove('active');
+  document.getElementById('btnTorch').classList.remove('on');
+  document.getElementById('btnTorch').classList.add('hidden');
   _scanState = null;
 }
 
