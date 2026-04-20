@@ -198,7 +198,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v43</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v44</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">📋</button>
@@ -451,8 +451,48 @@ let S = {
   _selectedGruppe: [],
 };
 
-function saveS() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} }
+// Debounced localStorage-Write: viele saveS()-Aufrufe bündeln sich zu einem stringify.
+// Kritische Stellen (beforeunload, pagehide) flushen synchron über saveSNow.
+let _saveTimer = null;
+function saveS() {
+  if (_saveTimer) return;
+  _saveTimer = setTimeout(() => {
+    _saveTimer = null;
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {}
+  }, 200);
+}
+function saveSNow() {
+  if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {}
+}
 function loadS() { try { const r = localStorage.getItem(KEY); if (r) S = {...S, ...JSON.parse(r)}; } catch(e) {} }
+window.addEventListener('beforeunload', saveSNow);
+window.addEventListener('pagehide', saveSNow);
+
+// ── CSV-CACHE (TTL) ─────────────────────────────────
+// Verhindert, dass mehrfache Tab-Wechsel bzw. parallele Aufrufe dieselbe
+// Sheet-CSV redundant ziehen. opts.force=true umgeht den Cache.
+const _csvCache = new Map(); // sheet → { ts, rows }
+const CSV_TTL_MS = 30000;
+async function fetchSheetCsv(sheet, opts) {
+  if (!S.sheetId) return null;
+  const o = opts || {};
+  const ttl = o.ttl != null ? o.ttl : CSV_TTL_MS;
+  const now = Date.now();
+  const hit = _csvCache.get(sheet);
+  if (hit && !o.force && (now - hit.ts) < ttl) return hit.rows;
+  // headers=0 → Google macht keine Header-Inferenz; alle Aufrufer nutzen rows.slice(1)
+  const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&headers=0&sheet=${encodeURIComponent(sheet)}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const rows = parseCSV(await res.text());
+  _csvCache.set(sheet, { ts: now, rows });
+  return rows;
+}
+function invalidateCsvCache(sheet) {
+  if (sheet) _csvCache.delete(sheet); else _csvCache.clear();
+}
+
 loadS();
 S._selectedGruppe = [];
 
@@ -641,7 +681,7 @@ function getFirstCred() {
 }
 
 async function startBoot() {
-  await Promise.all([ladeBestand(true), ladeEreignisse(), ladeRassen(), ladeHitCredentials()]);
+  await Promise.all([ladeBestand(true), ladeEreignisse(), ladeRassen(), ladeHitCredentials(), ladeGewichteCache()]);
 }
 
 // ── TABS ────────────────────────────────────────────
@@ -690,7 +730,7 @@ async function verbinden() {
   // Config ins Sheet persistieren
   persistConfig();
   // Credentials + Ereignisse + Rassen aus dem Sheet laden
-  await Promise.all([ladeHitCredentials(), ladeEreignisse(), ladeRassen()]);
+  await Promise.all([ladeHitCredentials(), ladeEreignisse(), ladeRassen(), ladeGewichteCache()]);
   toast('Alle Daten geladen ✓');
 }
 
@@ -710,10 +750,9 @@ async function ladeBestand(silent) {
   const st = document.getElementById('sheetStatus');
   if (!silent) st.innerHTML = connLine('spin', 'Lade Bestand…');
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&headers=0&sheet=Bestand&t=${Date.now()}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const rows = parseCSV(await res.text());
+    // Bei explizitem Verbinden erzwingen wir frische Daten, sonst darf Cache bedienen
+    const rows = await fetchSheetCsv('Bestand', { force: !silent });
+    if (!rows) return;
     // Header: Ohrmarke, Rasse, Geschlecht
     S.bestand = rows.slice(1).filter(r => r[0]?.trim()).map(r => ({
       nr: r[0].trim().padStart(5, '0'), rasse: r[1]?.trim() || '', geschlecht: r[2]?.trim().toLowerCase() || '',
@@ -729,10 +768,8 @@ async function ladeBestand(silent) {
 async function ladeEreignisse() {
   if (!S.sheetId) return;
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Ereignisse&t=${Date.now()}`;
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const rows = parseCSV(await res.text());
+    const rows = await fetchSheetCsv('Ereignisse');
+    if (!rows) return;
     // Header: Name, dann optional Betriebsnr-Spalten mit Wert zugang/abgang
     // Altes Format: Name, hitAktion (eine Spalte)
     // Neues Format: Name, Betrieb1, Betrieb2, ... (Spalten = Betriebsnr aus Header)
@@ -766,10 +803,8 @@ async function ladeEreignisse() {
 async function ladeRassen() {
   if (!S.sheetId) return;
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Rassen&t=${Date.now()}`;
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const rows = parseCSV(await res.text());
+    const rows = await fetchSheetCsv('Rassen');
+    if (!rows) return;
     S.rassen = rows.slice(1).map(r => r[0]?.trim()).filter(Boolean);
     saveS();
     fuelleRassen();
@@ -858,28 +893,43 @@ function fuelleRassen() {
 
 // ── SHEET SUCHE ─────────────────────────────────────
 let gewichteCache = null;
+// Pro-Ohrmarke-Index (neueste zuerst). Einmal beim Laden aufgebaut,
+// damit getLetzteWaegung/getNextEreignis nicht mehr linear über tausende
+// Einträge filtern+sortieren müssen.
+let gewichteByNr = new Map();
+
+function buildGewichteIndex() {
+  gewichteByNr = new Map();
+  if (!gewichteCache) return;
+  for (const e of gewichteCache) {
+    const list = gewichteByNr.get(e.nr);
+    if (list) list.push(e); else gewichteByNr.set(e.nr, [e]);
+  }
+  for (const list of gewichteByNr.values()) {
+    list.sort((a, b) => {
+      const da = datumToDate(a.datum), db = datumToDate(b.datum);
+      return (db || 0) - (da || 0);
+    });
+  }
+}
 
 async function ladeGewichteCache() {
   if (!S.sheetId) return;
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const rows = parseCSV(await res.text());
+    const rows = await fetchSheetCsv('Gewichte');
+    if (!rows) return;
     // Header: Datum, Ohrmarke, Gewicht, Ereignis
     gewichteCache = rows.slice(1).filter(r => r[0] && r[1]).map(r => ({
       datum: parseDatum(r[0]), nr: r[1].trim().padStart(5, '0'), gewicht: parseFloat(r[2]) || 0, ereignis: r[3]?.trim() || ''
     }));
+    buildGewichteIndex();
   } catch(e) {}
 }
 
 function getLetzteWaegung(nr) {
   if (!gewichteCache) return null;
-  const eintraege = gewichteCache.filter(e => e.nr === nr).sort((a,b) => {
-    const da = datumToDate(a.datum), db = datumToDate(b.datum);
-    return db - da;
-  });
-  return eintraege[0] || null;
+  const list = gewichteByNr.get(nr);
+  return list && list.length ? list[0] : null;
 }
 
 function getPreviousWeight(nr) {
@@ -895,9 +945,12 @@ function getNextEreignis(nr) {
   let lastEvent = null;
   let lastDate = null;
   if (gewichteCache) {
-    const entries = gewichteCache.filter(e => e.nr === nr && e.ereignis);
-    entries.sort((a, b) => datumToDate(b.datum) - datumToDate(a.datum));
-    if (entries.length) { lastEvent = entries[0].ereignis; lastDate = datumToDate(entries[0].datum); }
+    // Liste ist vorsortiert (neueste zuerst) — ersten Eintrag mit Ereignis nehmen
+    const list = gewichteByNr.get(nr);
+    if (list) {
+      const withEvt = list.find(e => e.ereignis);
+      if (withEvt) { lastEvent = withEvt.ereignis; lastDate = datumToDate(withEvt.datum); }
+    }
   }
   const logEntries = S.log.filter(e => e.nr === nr && e.ereignis).sort((a, b) => new Date(b.ts) - new Date(a.ts));
   if (logEntries.length) {
@@ -1026,8 +1079,26 @@ function onLomInput() {
   }
 }
 
+// Kein kompletter selectTier-Re-Render bei jeder Gewichts-Tippung —
+// nur die Tageszunahme-Zeile aktualisieren.
 document.getElementById('inpGewicht').addEventListener('input', () => {
-  if (selectedTier) selectTier(selectedTier.nr);
+  if (!selectedTier) return;
+  const gainEl = document.getElementById('tiInfoGain');
+  if (!gainEl) return;
+  const lw = getLetzteWaegung(selectedTier.nr);
+  if (!lw) { gainEl.innerHTML = '<span style="color:var(--muted)">Noch nicht gewogen</span>'; return; }
+  const lwDate = datumToDate(lw.datum);
+  if (!lwDate) return;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const tage = Math.max(1, Math.round((today - lwDate) / 86400000));
+  const aktuell = parseFloat(document.getElementById('inpGewicht').value);
+  if (!isNaN(aktuell) && aktuell > 0) {
+    const zunahme = Math.round((aktuell - lw.gewicht) / tage * 1000);
+    const cls = zunahme >= 0 ? 'gain-pos' : 'gain-neg';
+    gainEl.innerHTML = `<span class="${cls}">${zunahme >= 0 ? '+' : ''}${zunahme} g/Tag (${tage}d)</span>`;
+  } else {
+    gainEl.innerHTML = `<span style="color:var(--muted)">${tage} Tage seit letzter Wägung</span>`;
+  }
 });
 
 // Click outside closes suggestions
@@ -1090,6 +1161,9 @@ async function einstallenOhne() {
   document.getElementById("nrOhneStatus").textContent = "";
   document.getElementById("inpGewichtOhne").value = "";
   gewichteCache = null;
+  gewichteByNr = new Map();
+  invalidateCsvCache('Gewichte');
+  invalidateCsvCache('Bestand');
 
   sendeEintrag(entry).then(ok => {
     if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
@@ -1144,6 +1218,7 @@ async function nachmelden() {
   // LOM ins Sheet schreiben (Spalte 5)
   if (S.scriptUrl) {
     await sendToScript({ tab: 'Bestand', mode: 'upsert', updateByNr: '1', nr: nr, col: '5', val: lom });
+    invalidateCsvCache('Bestand');
   }
 
   // HIT Zugangsmeldung auf erstem Betrieb
@@ -1200,6 +1275,9 @@ async function einstallen() {
   document.getElementById("ohrmarkeStatus").textContent = "";
   document.getElementById("inpGewichtNeu").value = "";
   gewichteCache = null;
+  gewichteByNr = new Map();
+  invalidateCsvCache('Gewichte');
+  invalidateCsvCache('Bestand');
 
   sendeEintrag(entry).then(ok => {
     if (ok) { entry.synced = true; saveS(); updateSyncDot(); }
@@ -1249,8 +1327,14 @@ async function wiegen() {
 
   const btn = document.getElementById('btnWiegen');
   if (gewichteCache) {
-    gewichteCache.unshift({ datum: entry.ts.slice(0,10).split("-").reverse().join("."), nr: entry.nr, gewicht: entry.gewicht, ereignis: entry.ereignis });
+    const cacheEntry = { datum: entry.ts.slice(0,10).split("-").reverse().join("."), nr: entry.nr, gewicht: entry.gewicht, ereignis: entry.ereignis };
+    gewichteCache.unshift(cacheEntry);
+    // Index inkrementell pflegen: neuer Eintrag ist "neueste Wägung"
+    const list = gewichteByNr.get(entry.nr);
+    if (list) list.unshift(cacheEntry); else gewichteByNr.set(entry.nr, [cacheEntry]);
   }
+  // CSV-Cache invalidieren, damit renderBestand/renderLog frisch laden
+  invalidateCsvCache('Gewichte');
 
   // Tageszunahme berechnen
   let gainText = '';
@@ -1315,9 +1399,11 @@ function renderGruppeList() {
     return;
   }
 
+  // Auswahl als Set für schnelles Lookup und späteren Diff-Toggle
+  const selSet = new Set(S._selectedGruppe);
   liste.innerHTML = tiere.map(t => {
-    const sel = S._selectedGruppe.includes(t.nr);
-    return `<div class="group-item ${sel ? 'selected' : ''}" onclick="toggleGruppe('${t.nr}')">
+    const sel = selSet.has(t.nr);
+    return `<div class="group-item ${sel ? 'selected' : ''}" data-nr="${t.nr}" onclick="toggleGruppe('${t.nr}')">
       <div class="group-check">${sel ? '✓' : ''}</div>
       <div>
         <div class="group-item-num">${t.nr}</div>
@@ -1332,14 +1418,27 @@ function renderGruppeList() {
 function toggleGruppe(nr) {
   const wasEmpty = S._selectedGruppe.length === 0;
   const idx = S._selectedGruppe.indexOf(nr);
-  if (idx >= 0) S._selectedGruppe.splice(idx, 1);
+  const wasSelected = idx >= 0;
+  if (wasSelected) S._selectedGruppe.splice(idx, 1);
   else S._selectedGruppe.push(nr);
   // Auto-select Ereignis beim ersten Tier
   if (wasEmpty && S._selectedGruppe.length === 1) {
     const nextEvt = getNextEreignis(S._selectedGruppe[0]);
     if (nextEvt) document.getElementById('selEreignisGruppe').value = nextEvt;
   }
-  renderGruppeList();
+  // Nur die eine betroffene Zeile umschalten, statt alles neu zu rendern
+  const item = document.querySelector('.group-item[data-nr="' + nr + '"]');
+  if (item) {
+    const nowSelected = !wasSelected;
+    item.classList.toggle('selected', nowSelected);
+    const check = item.querySelector('.group-check');
+    if (check) check.textContent = nowSelected ? '✓' : '';
+  } else {
+    // Fallback, falls das DOM (z.B. nach Filter) gerade frisch sein muss
+    renderGruppeList();
+    return;
+  }
+  updateSelectedCount();
 }
 
 function filterGruppe() { renderGruppeList(); }
@@ -1424,6 +1523,7 @@ async function wiegenGruppe() {
   S._selectedGruppe = [];
   saveS();
   updateSyncDot();
+  invalidateCsvCache('Gewichte');
 
   let gainText = '';
   if (gainCount > 0) {
@@ -1550,10 +1650,8 @@ async function renderLog() {
   let sheetRows = [];
   if (S.sheetId) {
     try {
-      const url = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const rows = parseCSV(await res.text());
+      const rows = await fetchSheetCsv('Gewichte');
+      if (rows) {
         sheetRows = rows.slice(1).reverse().map(r => ({
           datum: r[0]||'', nr: r[1]||'', gewicht: r[2]||'', ereignis: r[3]||'', fromSheet: true
         }));
@@ -1940,15 +2038,13 @@ async function renderBestand() {
   if (!S.sheetId) { el.innerHTML = '<div class="bestand-empty">Bitte Sheet ID konfigurieren</div>'; return; }
 
   try {
-    // Lade Bestand + Gewichte + HI Tier Daten vom Sheet
-    const bestandUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&headers=0&sheet=Bestand&t=${Date.now()}`;
-    const bestandRes = await fetch(bestandUrl);
-    const bestandRows = bestandRes.ok ? parseCSV(await bestandRes.text()).slice(1) : [];
-
-    // Lade letzte Gewichte
-    const gewichteUrl = `https://docs.google.com/spreadsheets/d/${S.sheetId}/gviz/tq?tqx=out:csv&sheet=Gewichte&t=${Date.now()}`;
-    const gewichteRes = await fetch(gewichteUrl);
-    const gewichteRows = gewichteRes.ok ? parseCSV(await gewichteRes.text()).slice(1) : [];
+    // Cache bedient die meisten Tab-Wechsel; erst nach TTL wird neu geladen.
+    const [bestandFull, gewichteFull] = await Promise.all([
+      fetchSheetCsv('Bestand').catch(() => null),
+      fetchSheetCsv('Gewichte').catch(() => null)
+    ]);
+    const bestandRows = bestandFull ? bestandFull.slice(1) : [];
+    const gewichteRows = gewichteFull ? gewichteFull.slice(1) : [];
 
     // Gruppiere Gewichte pro Tier (letztes zuerst)
     const latestWeights = {};
@@ -2403,8 +2499,10 @@ async function syncBestandFromHIT() {
 // ── INIT ────────────────────────────────────────────
 fuelleEreignisse();
 fuelleRassen();
+// Gewichte-Index aus evtl. vorhandenem Cache bauen, damit Suche/Gain
+// sofort arbeiten können, falls startBoot noch läuft.
+buildGewichteIndex();
 if (S.sheetId) {
-  setTimeout(() => ladeGewichteCache(), 1500);
   checkPending();
 }
 </script>
