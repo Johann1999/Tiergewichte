@@ -198,7 +198,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v44</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v45</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">📋</button>
@@ -493,8 +493,29 @@ function invalidateCsvCache(sheet) {
   if (sheet) _csvCache.delete(sheet); else _csvCache.clear();
 }
 
+// ── APPS-SCRIPT-AUTH ────────────────────────────────
+// Neuer Deployment-Endpoint (Dispatcher mit APP_TOKEN-Prüfung). Ältere, lokal
+// gespeicherte scriptUrl wird beim Boot automatisch migriert.
+const NEW_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyenIm1KopxyC8HBDCo2RBDx_U54hd8DHUzReZDYZWxDCSWEyH78-oWW0KWwjbYLE3M/exec';
+const APP_TOKEN = 'abffgjkeritjndskemndklsmndjse';
+// token an jede Script-URL anhängen (getrennt mit & oder ?).
+function withToken(url) {
+  if (!url || !APP_TOKEN) return url;
+  return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(APP_TOKEN);
+}
+
 loadS();
 S._selectedGruppe = [];
+
+// Auto-Migration: alte Deployment-URLs auf den neuen Endpoint umbiegen.
+if (NEW_SCRIPT_URL && S.scriptUrl && S.scriptUrl !== NEW_SCRIPT_URL) {
+  console.log('[Boot] scriptUrl migriert:', S.scriptUrl, '→', NEW_SCRIPT_URL);
+  S.scriptUrl = NEW_SCRIPT_URL;
+  saveS();
+} else if (NEW_SCRIPT_URL && !S.scriptUrl) {
+  S.scriptUrl = NEW_SCRIPT_URL;
+  saveS();
+}
 
 // ── DATUM UTILS ─────────────────────────────────────
 function formatDatumKurz(s) {
@@ -552,7 +573,7 @@ renderHitCreds();
 async function ladeHitCredentials() {
   if (!S.scriptUrl) { console.log('[Creds] Kein Script URL → Laden übersprungen'); return; }
   try {
-    const res = await fetch(S.scriptUrl + '?action=getCredentials');
+    const res = await fetch(withToken(S.scriptUrl + '?action=getCredentials'));
     const data = await res.json();
     console.log('[Creds] Antwort vom Sheet:', JSON.stringify(data));
     if (data.credentials && Array.isArray(data.credentials)) {
@@ -624,7 +645,7 @@ async function addHitCred() {
 
   // Im Sheet speichern
   if (S.scriptUrl) {
-    await fetch(S.scriptUrl + '?action=saveCredentials&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin));
+    await fetch(withToken(S.scriptUrl + '?action=saveCredentials&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin)));
   }
 
   document.getElementById('inpNewBnr').value = '';
@@ -642,7 +663,7 @@ async function removeHitCred(idx) {
 
   // Im Sheet: PIN leeren (oder Zeile löschen – hier einfach PIN leeren)
   if (S.scriptUrl) {
-    await fetch(S.scriptUrl + '?action=saveCredentials&bnr=' + encodeURIComponent(cred.bnr) + '&pin=');
+    await fetch(withToken(S.scriptUrl + '?action=saveCredentials&bnr=' + encodeURIComponent(cred.bnr) + '&pin='));
   }
   toast('Betrieb ' + cred.bnr + ' entfernt');
   fuelleEreignisse();
@@ -653,7 +674,7 @@ async function testHitCred(idx) {
   const st = document.getElementById('hitCredsStatus');
   st.innerHTML = connLine('spin', 'Teste ' + cred.bnr + '…');
   try {
-    const res = await fetch(S.scriptUrl + '?action=testConnection&bnr=' + encodeURIComponent(cred.bnr) + '&pin=' + encodeURIComponent(cred.pin));
+    const res = await fetch(withToken(S.scriptUrl + '?action=testConnection&bnr=' + encodeURIComponent(cred.bnr) + '&pin=' + encodeURIComponent(cred.pin)));
     const data = await res.json();
     if (data.connected) {
       st.innerHTML = connLine('ok', cred.bnr + ': Verbindung OK ✓');
@@ -715,8 +736,8 @@ function saveCfg() {
 async function persistConfig() {
   if (!S.scriptUrl) return;
   try {
-    await fetch(S.scriptUrl + '?action=saveCredentials&bnr=__SHEET_ID__&pin=' + encodeURIComponent(S.sheetId));
-    await fetch(S.scriptUrl + '?action=saveCredentials&bnr=__SCRIPT_URL__&pin=' + encodeURIComponent(S.scriptUrl));
+    await fetch(withToken(S.scriptUrl + '?action=saveCredentials&bnr=__SHEET_ID__&pin=' + encodeURIComponent(S.sheetId)));
+    await fetch(withToken(S.scriptUrl + '?action=saveCredentials&bnr=__SCRIPT_URL__&pin=' + encodeURIComponent(S.scriptUrl)));
   } catch(e) { console.log('Config persistieren fehlgeschlagen:', e); }
 }
 
@@ -738,7 +759,7 @@ async function testScript() {
   const st = document.getElementById('scriptStatus');
   st.innerHTML = connLine('spin', 'Teste…');
   try {
-    const res = await fetch(S.scriptUrl + '?ping=1');
+    const res = await fetch(withToken(S.scriptUrl + '?ping=1'));
     const txt = await res.text();
     st.innerHTML = connLine('ok', 'Verbindung OK');
   } catch(e) { st.innerHTML = connLine('err', 'Fehler – URL prüfen'); }
@@ -1570,7 +1591,7 @@ async function sendeHitZugang(lom, datum, bnr, pin) {
     bnr = cred.bnr; pin = cred.pin;
   }
   try {
-    const url = S.scriptUrl + '?action=hitZugang&lom=' + encodeURIComponent(lom) + '&datum=' + encodeURIComponent(datum) + '&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin);
+    const url = withToken(S.scriptUrl + '?action=hitZugang&lom=' + encodeURIComponent(lom) + '&datum=' + encodeURIComponent(datum) + '&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin));
     const res = await fetch(url);
     return await res.json();
   } catch(e) {
@@ -1586,7 +1607,7 @@ async function sendeHitAbgang(lom, datum, bnr, pin) {
     bnr = cred.bnr; pin = cred.pin;
   }
   try {
-    const url = S.scriptUrl + '?action=hitAbgang&lom=' + encodeURIComponent(lom) + '&datum=' + encodeURIComponent(datum) + '&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin);
+    const url = withToken(S.scriptUrl + '?action=hitAbgang&lom=' + encodeURIComponent(lom) + '&datum=' + encodeURIComponent(datum) + '&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin));
     const res = await fetch(url);
     return await res.json();
   } catch(e) {
@@ -1603,7 +1624,7 @@ async function sendToScript(params) {
       cleanParams[key] = (isStrictNum && value !== "") ? parseFloat(value) : value;
     } else { cleanParams[key] = value; }
   }
-  const url = S.scriptUrl + "?" + new URLSearchParams(cleanParams).toString();
+  const url = withToken(S.scriptUrl + "?" + new URLSearchParams(cleanParams).toString());
   try {
     const res = await fetch(url);
     return (await res.text()).trim() === "ok";
@@ -1984,7 +2005,7 @@ async function getHITierDaten(ohrmarke, bnr, pin) {
     bnr = cred.bnr; pin = cred.pin;
   }
   try {
-    const url = S.scriptUrl + '?action=getTier&ohrmarke=' + encodeURIComponent(ohrmarke) + '&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin);
+    const url = withToken(S.scriptUrl + '?action=getTier&ohrmarke=' + encodeURIComponent(ohrmarke) + '&bnr=' + encodeURIComponent(bnr) + '&pin=' + encodeURIComponent(pin));
     const res = await fetch(url);
     const data = await res.json();
     if (data && !data.error) return data;
@@ -2010,7 +2031,7 @@ async function testHITierConnection() {
   st.innerHTML = connLine('spin', 'Teste HIT mit ' + cred.bnr + '…');
 
   try {
-    const res = await fetch(S.scriptUrl + '?action=testConnection&bnr=' + encodeURIComponent(cred.bnr) + '&pin=' + encodeURIComponent(cred.pin));
+    const res = await fetch(withToken(S.scriptUrl + '?action=testConnection&bnr=' + encodeURIComponent(cred.bnr) + '&pin=' + encodeURIComponent(cred.pin)));
     const data = await res.json();
 
     if (data.connected) {
@@ -2157,7 +2178,7 @@ async function editTierNr(altNr) {
     let renamed = false;
     // renameNr-Action: ändert Bestand + Gewichte in einem Aufruf
     try {
-      const url = S.scriptUrl + '?action=renameNr&altNr=' + encodeURIComponent(altNr) + '&neuNr=' + encodeURIComponent(clean);
+      const url = withToken(S.scriptUrl + '?action=renameNr&altNr=' + encodeURIComponent(altNr) + '&neuNr=' + encodeURIComponent(clean));
       const res = await fetch(url);
       const txt = await res.text();
       try {
@@ -2447,7 +2468,7 @@ async function syncBestandFromHIT() {
     let allHitTiere = [];
     for (const cred of S.hitCredentials) {
       document.getElementById('pendingText').textContent = 'Lade HIT Bestandsregister für ' + cred.bnr + '…';
-      const res = await fetch(S.scriptUrl + '?action=getBestand&bnr=' + encodeURIComponent(cred.bnr) + '&pin=' + encodeURIComponent(cred.pin));
+      const res = await fetch(withToken(S.scriptUrl + '?action=getBestand&bnr=' + encodeURIComponent(cred.bnr) + '&pin=' + encodeURIComponent(cred.pin)));
       const hitTiere = await res.json();
       if (hitTiere.error) {
         toast('HIT Fehler für ' + cred.bnr + ': ' + hitTiere.error, true);
