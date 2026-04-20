@@ -198,7 +198,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v41</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v42</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">📋</button>
@@ -1653,6 +1653,12 @@ async function startLomScan(countryInputId, digitsInputId, onInputHandlerName) {
   const hasTorch = !!(track && track.getCapabilities && track.getCapabilities().torch);
   if (hasTorch) torchBtn.classList.remove('hidden');
 
+  // Unterstützte Formate loggen (hilft beim Debuggen auf verschiedenen Geräten)
+  try {
+    const supported = await BarcodeDetector.getSupportedFormats();
+    console.log('[Scan] Unterstützte Formate:', supported);
+  } catch(_) {}
+
   let detector;
   try {
     // Tierpass-Barcodes sind typisch Code 128 (DE+Ziffern), ITF (nur Ziffern) oder EAN-13
@@ -1685,37 +1691,6 @@ async function toggleTorch() {
   }
 }
 
-function _guideRectInVideoCoords() {
-  // Rechne das Guide-Rahmen-Rechteck in die Koordinaten um, die BarcodeDetector
-  // in boundingBox liefert (= Pixel-Koordinaten des <video>-Elements).
-  const video = _scanState.video;
-  const guide = document.querySelector('.scan-guide');
-  if (!video || !guide) return null;
-  const vRect = video.getBoundingClientRect();
-  const gRect = guide.getBoundingClientRect();
-  // object-fit: cover → Video-Inhalt ist größer als sichtbarer Bereich.
-  // BarcodeDetector arbeitet auf dem HTMLVideoElement direkt, d.h. boundingBox
-  // ist relativ zum Video-Element (nicht zum Stream-Inhalt). Daher reicht der
-  // Viewport-Offset zwischen Guide und Video.
-  return {
-    left: gRect.left - vRect.left,
-    top: gRect.top - vRect.top,
-    right: gRect.right - vRect.left,
-    bottom: gRect.bottom - vRect.top
-  };
-}
-
-function _codeInGuide(box, guide) {
-  if (!guide || !box) return true; // kein Guide → nicht filtern
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  // 10% Toleranz nach außen
-  const tolX = (guide.right - guide.left) * 0.1;
-  const tolY = (guide.bottom - guide.top) * 0.1;
-  return cx >= guide.left - tolX && cx <= guide.right + tolX
-      && cy >= guide.top - tolY && cy <= guide.bottom + tolY;
-}
-
 async function _scanLoop() {
   if (!_scanState || !_scanState.active) return;
   const { video, detector, status } = _scanState;
@@ -1723,17 +1698,13 @@ async function _scanLoop() {
   if (video.readyState >= 2) {
     try {
       const codes = await detector.detect(video);
-      const guide = _guideRectInVideoCoords();
 
-      // Kandidaten filtern: im Guide-Rahmen + gültiges LOM-Format
+      // Kandidaten: alle gelesenen Codes durch Format-Filter schicken.
+      // Der strenge _parseScannedLom lehnt die Registernummer (12 Ziffern
+      // ohne Länderpräfix) und zufälligen OCR-Text automatisch ab.
       let picked = null;
       for (const c of codes || []) {
         const raw = c.rawValue || '';
-        const inGuide = _codeInGuide(c.boundingBox, guide);
-        if (!inGuide) {
-          console.log('[Scan] ignoriert (außerhalb Rahmen):', raw, c.format);
-          continue;
-        }
         const parsed = _parseScannedLom(raw, c.format);
         if (!parsed) {
           console.log('[Scan] ignoriert (kein LOM-Format):', raw, c.format);
@@ -1744,8 +1715,7 @@ async function _scanLoop() {
       }
 
       if (picked) {
-        // Debounce: gleicher Wert zweimal hintereinander nötig,
-        // damit keine zufällige Fehllesung durchrutscht.
+        // Debounce: gleicher Wert zweimal hintereinander nötig
         if (_scanState.lastCandidate === picked.raw) {
           _scanState.lastCandidateCount++;
         } else {
@@ -1763,10 +1733,14 @@ async function _scanLoop() {
           return;
         }
       } else if (codes && codes.length > 0) {
-        // Irgendwas erkannt, aber nichts akzeptiert → Zähler zurücksetzen
+        // Irgendwas erkannt, aber keine LOM → Zähler zurücksetzen und Hinweis
         _scanState.lastCandidate = null;
         _scanState.lastCandidateCount = 0;
-        status.textContent = 'Barcode nicht gültig — LOM-Strichcode in den Rahmen halten';
+        const raws = codes.map(c => c.rawValue).join(', ').slice(0, 60);
+        status.textContent = '⚠ Erkannt aber keine LOM: ' + raws;
+      } else {
+        // Nichts erkannt → Hinweis, ohne Kandidaten-Zähler zu resetten
+        status.textContent = 'LOM-Barcode (oben am Tierpass) in den Rahmen halten…';
       }
     } catch(err) {
       console.log('[Scan] Detect-Fehler:', err.message);
