@@ -198,7 +198,7 @@
 <div class="app-header">
   <span style="font-size:1.1rem">⚖️</span>
   <span class="logo">TIERGEWICHTE</span>
-  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v42</span>
+  <span style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);margin-left:0.3rem">v43</span>
   <span id="syncDot" title="Nicht synchronisiert"></span>
   <span style="flex:1"></span>
   <button onclick="toggleLog()" style="background:none;border:none;color:var(--muted);font-size:1.3rem;cursor:pointer;padding:0.2rem">📋</button>
@@ -1751,38 +1751,48 @@ async function _scanLoop() {
 }
 
 /**
- * Strengere LOM-Validierung: Nur echte Tierpass-LOM akzeptieren, nicht
- * die Registernummer-Barcode unterhalb. Unterscheidungsmerkmale:
- *   - LOM (Code 128 alphanumerisch): DE/AT/… + 10 Ziffern = 12 Zeichen
- *   - LOM (ITF/Ziffern 15-stellig): 276/040/756/208/528 + 12 weitere Ziffern
- *   - Registernummer: 12 Ziffern ohne Country-Präfix → wird abgelehnt
+ * LOM-Erkennung: findet eine gültige LOM auch in Barcodes, die
+ * zusätzliche Präfixe/Suffixe enthalten (GS1-AI (01), Prüfziffern,
+ * Trennzeichen etc.).
+ *
+ * Akzeptiert:
+ *   - "DE0367628563" → DE + 0367628563
+ *   - "(01)0276000367628563" → DE + 0367628563 (über 15-stelligen Block)
+ *   - "0276000367628563" (führende 0 + 15 Stellen) → DE + 0367628563
+ *   - "DE 03 6762 8563 123" (irgendwelche Zusätze) → DE + 0367628563
+ *
+ * Lehnt ab:
+ *   - "032510440430" (12 Ziffern, Registernummer)
+ *   - zufälligen Text ohne erkennbare LOM
  */
+const LOM_COUNTRY_CODES = ['DE','AT','CH','DK','NL','FR','BE','LU','PL','CZ','IT','ES','UK','IE','SE','NO','FI','HU','SK','SI','GB'];
+const LOM_COUNTRY_PREFIX = { '276':'DE','040':'AT','756':'CH','208':'DK','528':'NL','250':'FR','056':'BE','616':'PL','203':'CZ','380':'IT','724':'ES','826':'UK','442':'LU','372':'IE','752':'SE','578':'NO','246':'FI','348':'HU','703':'SK','705':'SI' };
+
 function _parseScannedLom(raw, format) {
   if (!raw) return null;
   const clean = raw.trim().toUpperCase();
-  const digitsOnly = clean.replace(/\D/g, '');
 
-  // Variante A: 2 Buchstaben + 10 Ziffern (Code 128 Tierpass, z.B. DE0367628563)
-  const letterMatch = clean.match(/^\s*([A-Z]{2})\s*(\d{2})\s*(\d{3})\s*(\d{5})\s*$/);
+  // Variante A: Länderbuchstaben gefolgt von 10 Ziffern — irgendwo im String.
+  // Leerzeichen innerhalb der 10 Ziffern sind erlaubt (2+3+5-Gruppierung möglich).
+  const countryPattern = LOM_COUNTRY_CODES.join('|');
+  const reLetter = new RegExp('(' + countryPattern + ')[^A-Z0-9]*(\\d{2})[^A-Z0-9]*(\\d{3})[^A-Z0-9]*(\\d{5})(?!\\d)');
+  const letterMatch = clean.match(reLetter);
   if (letterMatch) {
-    const known = ['DE','AT','CH','DK','NL','FR','BE','LU','PL','CZ','IT','ES','UK','IE','SE','NO','FI','HU','SK','SI'];
-    if (known.includes(letterMatch[1])) {
-      return { country: letterMatch[1], digits: letterMatch[2] + letterMatch[3] + letterMatch[4] };
+    return { country: letterMatch[1], digits: letterMatch[2] + letterMatch[3] + letterMatch[4] };
+  }
+
+  // Variante B: 15 aufeinanderfolgende Ziffern mit bekanntem ISO-3166-Präfix —
+  // irgendwo im String (also auch hinter "(01)0" oder ähnlichen GS1-Präfixen).
+  const digitsOnly = clean.replace(/\D/g, '');
+  for (const [prefix, country] of Object.entries(LOM_COUNTRY_PREFIX)) {
+    const idx = digitsOnly.indexOf(prefix);
+    if (idx >= 0 && digitsOnly.length - idx >= 15) {
+      // Letzte 10 Ziffern des 15er-Blocks sind die LOM-Nummer
+      return { country, digits: digitsOnly.substr(idx, 15).slice(-10) };
     }
   }
 
-  // Variante B: 15 Ziffern EU-Code mit bekanntem ISO-3166-Präfix
-  if (/^\d{15}$/.test(digitsOnly)) {
-    const prefix = digitsOnly.slice(0, 3);
-    const countryMap = { '276': 'DE', '040': 'AT', '756': 'CH', '208': 'DK', '528': 'NL', '250': 'FR', '056': 'BE', '616': 'PL', '203': 'CZ', '380': 'IT', '724': 'ES' };
-    if (countryMap[prefix]) {
-      return { country: countryMap[prefix], digits: digitsOnly.slice(-10) };
-    }
-    // 15 Ziffern aber kein bekannter Präfix → wahrscheinlich keine LOM
-    return null;
-  }
-
-  // Alles andere (insb. 12-stellige Ziffernfolgen = Registernummer) ablehnen.
+  // Sonstiges (insbesondere 12-stellige Registernummern, zufälliger Text) → ablehnen
   return null;
 }
 
